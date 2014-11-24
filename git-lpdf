@@ -168,6 +168,7 @@ PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 
 
 .. References
+.. ..........
 .. _background: http://www.ctan.org/pkg/background
 .. _git-latexdiff: https://gitorious.org/git-latexdiff
 .. _latexdiff: http://www.ctan.org/pkg/latexdiff
