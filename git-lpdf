@@ -95,7 +95,7 @@ in the current repository, however, we also allow them to be --, for the files
 in the current working directory, or another directory.
 
 Examples:
-## .. code:: bash
+.. code:: bash
   > git ldiff   # compare most recent commit with current (uncommited) version
   > git ldiff --main myfile.tex  # compare most recent commit for myfile  with current version
   > git ldiff <commit> # compare commit with current verion
@@ -115,13 +115,13 @@ Creates a PDF file for the main latex file in the repository with commit
 information printed as a banner down the left hand margin on each page.
 
 Examples:
-## .. code:: bash
+.. code:: bash
   > git lpdf           # produces time-stamped "Latest version" of main latex file
   > git lpdf b675cdf   # produces pdf file for main latex file as of commit b675cdf
   > git lpdf --main myfile.tex # produces pdf file for my file as of commit b675cdf
 
 By default the script uses pdflatex. This can be changed using the --latex option:
-## .. code:: bash
+.. code:: bash
   > git lpdf --latex   # produces time-stamped "Latest version" of main latex file
 
 END_USAGE
