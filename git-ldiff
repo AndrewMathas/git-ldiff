@@ -1,0 +1,319 @@
+#!/bin/bash -f
+
+# A bash script for producing pdf files from a git repository that tracks latex
+# documents. There are two modes:
+#  - ldiff: uses latexdiff to create a pdf file that highlights the differences between commits
+#  - lpdf:  produces a latex file for the given commit in the repository
+# script is partially based on the git-latexdiff script available on the web.
+#
+# Andrew Mathas June 2014
+#
+# TODO:
+#  - clean up the argument parsing
+#  - better handling of latexdiff options
+#  - improve documentation 
+#----------------------------------------------------------------------------
+
+function exit_with_error()
+{
+  echo "$prog error: $*"
+  exit 1
+}
+
+# defaults
+case $(basename $0) in
+  *diff*) prog="ldiff" ;;
+  *pdf*)  prog="lpdf" ;;
+  *)      exit_with_error "usage: invalid program name" ;;
+esac
+
+cleaning="yes"
+debugging="no"
+latex="pdflatex -interaction=batchmode"
+latex_opt=""
+old_commit=""
+new_commit=""
+tex_file=""
+latexdiff_type="CFONT"
+
+top_dir=$(PWD)       # save the current working directory
+tmp_dir="/tmp/$prog" # default temporary directory
+
+# program specific defaults
+case $prog in
+  ldiff)
+    old_commit_default="HEAD"
+    new_commit_default="--"
+    ldiff_options="--subtype=MARGIN --flatten --ignore-warnings"
+    if [[ -r $HOME/.latexdiffrc ]]; then
+      ldiff_options="${ldiff_options} -c $HOME/.latexdiffrc"
+    fi
+    ;;
+  lpdf)
+    old_commit_default="--"
+    new_commit_default=""  # will not be used
+    ;;
+esac
+
+ldiff_usage="$(cat << USAGE
+Usage: git ldiff [--main file] [--latex latex executable] [OLD] [NEW]
+
+By default the files in the HEAD of the git repository are compared with
+the files in current working directory. Ostensibly, OLD and NEW are git shas
+in the current repository, however, we also allow them to be --, for the files
+in the current working directory, or another directory.
+USAGE
+)"
+
+function usage()
+{
+  case $prog in
+    ldiff) echo "$ldiff_usage" ;;
+    lpdf)  echo "$lpdf_usage" ;;
+  esac
+}
+
+# extract_git_files sha tmp
+function extract_git_files
+{
+  sha="$1"   # sha identifying a commit -- or a directory
+  # subdirectory of  $tmp_dir to put the files in
+  if [[ $# -eq 2 ]]; then
+    tmp="$tmp_dir/$2"
+  else
+    tmp="$tmp_dir"
+  fi
+  if [[ "$sha" = "--" ]]; then
+    # $target_dir to $top_dir
+    /bin/cp -R "$top_dir/" "$tmp"
+  elif [[ -d "$sha" ]]; then
+    # $target_dir to $top_dir
+    /bin/cp -R "$sha/" "$tmp"
+  else
+    # extract files git archive into $tmp
+    cd "$git_dir" || exit_with_error "unable to cd to git directory $git_dir"
+    if [[ $# -eq 2 ]]; then
+      mkdir $tmp || exit_with_error "unable to create directory $tmp"
+    fi
+    git archive --format=tar "$sha" | tar -xC $tmp -f - || exit_with_error "unable to extract files from $sha"
+  fi
+}
+
+# add a banner down the left-hand margin on each page of the tex file
+# usage: add_banner_to_TeX_file<filename> <banner>
+function add_banner_to_TeX_file()
+{
+  banner="usepackage{background}\\\\backgroundsetup{position={-1,1},anchor=left,angle=90,scale=1.2,pages=all,opacity=1,contents={$2}}\\\\"
+  sed -i.bak  "s@begin{document}@${banner}&@" "$1"
+}
+
+# latex TeX file as many times as necessary
+# usage: latex_file <dir> <file>
+function latex_file()
+{
+  cd "$1"
+  file="${2%.*}"    # remove the extension from the filename
+
+  # add $top_dir to TEXINPUTS
+  if [[ -z "$TEXINPUTS" ]] ; then
+    TEXINPUTS=".:${top_dir}/:"
+  else
+    TEXINPUTS="${TEXINPUTS}${top_dir}/:"
+  fi
+
+  $latex "$latex_opt" $file
+
+  case $latex in    # test for the correct extension (pdf or dvi or ?)
+    *pdf*) ext="pdf" ;;
+    *)     ext="dvi" ;;
+  esac
+
+  if [[ -z $file.$ext || ! -r $file.$ext ]] ; then
+    # To check for errors, rather than looking at the exit code from latex we
+    # check to see if a PDF/dvi files has been created because quite often there
+    # are errors in the latex file but we still get a reasonable PDF file.
+    # After the first pass we assume that latex-ing is OK
+    exit_with_error "unable to latex $file"
+  fi
+
+  # if there is an aux file assume we need to update cross-references
+  if [[ -s $file.aux ]]; then
+    # run bibtex, and re-latex, if there is a \bibdata command in the aux file
+    needs_bibtex=$(grep '\\bibdata' $file.aux)
+    if [[ -n $needs_bibtex ]]; then
+      bibtex $file  # generate bibliography
+      $latex $file  # need an extra run of latex
+    fi
+    $latex $file    # to update cross-references
+  fi
+}
+
+function ldiff()
+{
+  # if we have the same git sha1's then there's nothing to do
+  [[ "$old_commit" = "$new_commit" ]] && exit_with_error "You are comparing same the sha1's!"
+
+  # extract the archived files
+  extract_git_files $old_commit old
+  extract_git_files $new_commit new
+
+  # now create the latexdiff file
+  cd $tmp_dir
+  [[ -r old/$tex_file ]] || exit_with_error "old/$tex_file does not exist"
+  [[ -r new/$tex_file ]] || exit_with_error "new/$tex_file does not exist"
+  latexdiff $ldiff_options --type=$latexdiff_type "old/$tex_file" "new/$tex_file" | sed 's@@@g' > "$tex_file"
+
+  add_banner_to_TeX_file "$tex_file" "Latexdiff:  $old_commit \\\\quad$\\\\leftrightarrow$\\\\quad $new_commit"
+  latex_file $tmp_dir $tex_file
+
+  # finally, if we are cleaning up then move the pdf file to $top_dir and
+  # delete all of the files in $tmp_dir
+  if [[ -r $pdf_file && $cleaning = "yes" ]]; then
+    pdf_changes=$top_dir/${pdf_file/.pdf/-changes.pdf}
+    /bin/mv $tmp_dir/$pdf_file $pdf_changes
+    open $pdf_changes
+    /bin/rm -Rf $tmp_dir
+  else
+    [[ -r $pdf_file ]] && open $pdf_file
+  fi
+}
+
+function lpdf()
+{
+  # extract the archived files
+  extract_git_files $old_commit
+
+  # determine banner to specify the commit on each page of the $tex_file
+  if [[ "$old_commit" = "--" ]]; then
+    commit_message=$(date "+Latest version: %a %d %b %Y")
+  else
+    commit_message=$(git log --pretty='format:%ad, %s, %h' --date=local -n 1 $old_commit)
+  fi
+
+  # now create the latexdiff file
+  cd $tmp_dir
+  [[ -r $tex_file ]] || exit_with_error "$tex_file does not exist"
+  add_banner_to_TeX_file "$tex_file" "$commit_message"
+
+  latex_file $tmp_dir $tex_file
+
+  # finally, if we are cleaning up then move the pdf file to $top_dir and
+  # delete all of the files in $tmp_dir
+  if [[ ! -r $pdf_file ]]; then
+    echo "No pdf file produced"
+  elif [[ $cleaning = "yes" ]]; then
+    /bin/mv $tmp_dir/$pdf_file $top_dir/$pdf_file
+    open -n $top_dir/$pdf_file
+    /bin/rm -Rf $tmp_dir
+  else
+    open $pdf_file
+  fi
+}
+
+# first determine if we are in a git repository and, if so, where the repository is
+git_dir="$(git rev-parse --show-toplevel)/.git"
+[[ ! -d "$git_dir" ]] && exit_with_error "not in a git repository?"
+
+# parse command line arguments
+while [[ $# -ne 0 ]]; do
+  case $1 in
+    -h|--help) usage && exit ;;
+    --main|-m)
+      shift
+      [[ $# -eq 0 ]] && exit_with_error "--main requires an argument"
+      tex_file="$1" && shift
+      ;;
+    --latex|-l)
+      shift
+      [[ $# -eq 0 ]] && exit_with_error "--latex requires an argument"
+      latex="$1" && shift
+      text ! -x $latex && exit_with_error "latex executable $latex not executable"
+      ;;
+    --latex-opt)
+      shift
+      [[ $# -eq 0 ]] && exit_with_error "--latex requires an argument"
+      latex_opt="$1" && shift
+      ;;
+    --tmp_dir|-t)
+      shift
+      [[ $# -eq 0 ]] && exit_with_error "--tmp requires an argument"
+      tmp_dir="$1" && shift
+      [[ "$tmp_dir" = "job" ]] && tmp_dir="/tmp/latexdiff-$$"
+      ;;
+    --nocleaning|-n)
+      cleaning="no"
+      shift
+      ;;
+    --debug*|-d)
+      set -vx  # turn on inbuilt debugging
+      debugging="yes"
+      cleaning="no"
+      shift
+      ;;
+    --latexdiff-type|-T)
+      shift
+      latexdiff_type="$1" && shift
+      ;;
+    --safe|-s)
+      # add extra options to ldiff_options so that latexdiff has a better chance of working
+      ldiff_options="$ldiff_options --math-markup=whole"
+      shift
+      ;;
+    --verysafe|-S)
+      # add extra options to ldiff_options so that latexdiff has an even better chance of working
+      ldiff_options="$ldiff_options --math-markup=off"
+      shift
+      ;;
+    *)
+      if [[ -z $old_commit ]]; then
+        old_commit="$1"
+      elif [[ -z $new_commit ]] ; then
+        new_commit="$1"
+      else
+        usage && exit 1
+      fi
+      shift
+      ;;
+  esac
+done
+
+[[ -z $old_commit ]] && old_commit=$old_commit_default
+[[ -z $new_commit ]] && new_commit=$new_commit_default
+
+# If the tex_file has not been specified we try to guess it and exit if the
+# repository contains more than one tex file.
+if [[ -z "$tex_file" ]] ; then
+  tex_file="$(git grep -l '^[ \t]*\\documentclass')"
+  [[ ! -r "$tex_file" ]] && exit_with_error "Tex file ambiguous. Specify filename using --main"
+elif [[ ! -r "$tex_file" ]]; then
+  exit_with_error "Unable to read file $tex_file"
+fi
+pdf_file=${tex_file/.tex/.pdf}
+
+# if using the default tmp directory then delete it otherwise try to create it.
+[[ $tmp_dir = "/tmp/$prog" ]] && /bin/rm -Rf /tmp/$prog
+if [[ ! -d "$tmp_dir" ]] ; then
+  mkdir $tmp_dir || exit_with_error "unable to create temporary directory $tmp_dir"
+fi
+
+# print debugging information if requested
+if [[ $debugging = "yes" ]]; then
+  cat << debugging
+$prog should be finishing:
+  top_dir:    $top_dir
+  tmp_dir:    $tmp_dir
+  tex_file:   $tex_file
+  pdf_file:   $pdf_file
+  cleaning:   $cleaning
+  old commit: $old_commit
+  new commit: $new_commit
+debugging
+fi
+
+# fork to comparing two commits with latexdiff or pdf-ing one commit
+case $prog in
+  ldiff) ldiff
+    ;;
+  lpdf)  lpdf
+    ;;
+esac
