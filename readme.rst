@@ -1,18 +1,19 @@
 A bash script for producing pdf files from a git repository that tracks latex
 documents. There are two modes:
- - ldiff: uses latexdiff to create a pdf file that highlights the differences between commits
  - lpdf:  produces a latex file for the given commit in the repository
+ - ldiff: uses latexdiff to create a pdf file that highlights the differences between commits
 script is partially based on the git-latexdiff script available on the web.
 The date and commit information are printed as a banner on the PDF files.
+This script should be used from inside git.
 
 Andrew Mathas June 2014
 
-TODO
+**To do**
  - clean up the argument parsing
  - better handling of latexdiff options
  - improve documentation 
 
-INSTALLATION
+**Installation**
 
 Clone the git repository, or download the shell script, and then type:
   ./git-ldiff --install [directory]   # directory defaults to /Users/andrew/bin
@@ -20,7 +21,7 @@ This will create two links, git-lpdf and git-ldiff, in the specified directory
 to the shell script git-ldiff. This directory should be in your path
   grep "" $0 | sed 's/## //' > $readme
 
-USAGE FOR LPDF SCRIPT
+**Usage for lpdf script**
 Usage: git lpdf [--main file] [--latex latex executable] [commit]
 
 Creates a PDF file for the main latex file in the repository with commit
@@ -34,10 +35,10 @@ information printed as a banner down the left hand margin on each page.
   By default the script uses pdflatex. This can be changed using the --latex option:
     > git lpdf --latex   # produces time-stamped "Latest version" of main latex file
 
-USAGE FOR LDIFF SCRIPT
+**Usage for ldiff script**
 Usage: git ldiff [--main file] [--latex latex executable] [OLD] [NEW]
 
-This mode requires latexdiff <http:...>
+To use this mode you need to have latexdiff <http://www.ctan.org/pkg/latexdiff> installed.
 
 By default the files in the HEAD of the git repository are compared with
 the files in current working directory. Ostensibly, OLD and NEW are git shas
