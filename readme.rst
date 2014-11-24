@@ -43,13 +43,13 @@ Usage: git lpdf [--main file] [--latex latex executable] [commit]
 Creates a PDF file for the main latex file in the repository with commit
 information printed as a banner down the left hand margin on each page.
 
-  Examples:
-    > git lpdf           # produces time-stamped "Latest version" of main latex file
-    > git lpdf b675cdf   # produces pdf file for main latex file as of commit b675cdf
-    > git lpdf --main myfile.tex # produces pdf file for my file as of commit b675cdf
+Examples:
+  > git lpdf           # produces time-stamped "Latest version" of main latex file
+  > git lpdf b675cdf   # produces pdf file for main latex file as of commit b675cdf
+  > git lpdf --main myfile.tex # produces pdf file for my file as of commit b675cdf
 
-  By default the script uses pdflatex. This can be changed using the --latex option:
-    > git lpdf --latex   # produces time-stamped "Latest version" of main latex file
+By default the script uses pdflatex. This can be changed using the --latex option:
+  > git lpdf --latex   # produces time-stamped "Latest version" of main latex file
 
 Usage for ldiff script
 ======================
@@ -62,14 +62,14 @@ the files in current working directory. Ostensibly, OLD and NEW are git shas
 in the current repository, however, we also allow them to be --, for the files
 in the current working directory, or another directory.
 
-  Examples:
-    > git ldiff   # compare most recent commit with current (uncommited) version
-    > git ldiff --main myfile.tex  # compare most recent commit for myfile  with current version
-    > git ldiff <commit> # compare commit with current verion
-    > git ldiff <dirame> [commit] # compare version in directory <dirname> with specified commit
+Examples:
+  > git ldiff   # compare most recent commit with current (uncommited) version
+  > git ldiff --main myfile.tex  # compare most recent commit for myfile  with current version
+  > git ldiff <commit> # compare commit with current verion
+  > git ldiff <dirame> [commit] # compare version in directory <dirname> with specified commit
 
-   There are also --safe and --verysafe options that are sometimes more
-   successful in getting latexdiff to work.
+ There are also --safe and --verysafe options that are sometimes more
+ successful in getting latexdiff to work.
     
 
 To do
@@ -98,4 +98,4 @@ PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 .. _latexdiff: http://www.ctan.org/pkg/latexdiff
 .. _GPL: http://www.gnu.org/licenses/gpl.html
 
-.. Automatically generated Mon 24 Nov 2014 23:29:09 AEDT.
+.. Automatically generated Mon 24 Nov 2014 23:30:13 AEDT.
