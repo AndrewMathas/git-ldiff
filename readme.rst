@@ -9,14 +9,14 @@ This script is partially motivated by the script git-latexdiff_ and my
 attempts to get it to work the way that I wanted. The date and commit information is printed 
 as a banner on the PDF files. This script should be used from inside git.
   
-The main idea of the script is to provide an easy way to produce PDF files
-from a git repository that are clearly annotated with the commit data. For
+The main idea of the script is to provide an easy way to produce a PDF file
+from a git repository that is clearly annotated with the commit data. For
 example
    > git lpdf <commit>
-will produce a PDF file for commit <commit> of the latex file in the current
+will produce a PDF file for the commit <commit> of the latex file in the current
 repository. Using latexdiff_, the command
    > git ldiff <commit>
-produce a PDF file that highlights the differences between the commit <commit> and the current
+produces a PDF file that highlights the differences between the commit <commit> and the current
 working copy of the latex file in the current repository. Similarly,
    > git ldiff <commit1> <commit1>
 produces a PDf file showing he differences between two commits.
@@ -98,3 +98,5 @@ References
 .. _git-latexdiff: https://gitorious.org/git-latexdiff
 .. _latexdiff: http://www.ctan.org/pkg/latexdiff
 .. _GPL: http://www.gnu.org/licenses/gpl.html
+
+.. Automatically generated Mon 24 Nov 2014 23:28:01 AEDT.
