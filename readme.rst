@@ -11,13 +11,16 @@ as a banner on the PDF files. This script should be used from inside git.
   
 The main idea of the script is to provide an easy way to produce a PDF file
 from a git repository that is clearly annotated with the commit data. For
-example
+example:
+.. code:: bash
    > git lpdf <commit>
 will produce a PDF file for the commit <commit> of the latex file in the current
 repository. Using latexdiff_, the command
+.. code:: bash
    > git ldiff <commit>
 produces a PDF file that highlights the differences between the commit <commit> and the current
 working copy of the latex file in the current repository. Similarly,
+.. code:: bash
    > git ldiff <commit1> <commit1>
 produces a PDf file showing he differences between two commits.
   
@@ -35,6 +38,9 @@ to the shell script git-ldiff. This directory should be in your path.
   
 The script makes use of the backgrounds_ package andlatexdiff_. Both of these
 are available from ctan and are automatically installed with TeXLive.
+.. code:: bash
+.. code:: bash
+.. code:: bash
 
 Usage for lpdf script
 =====================
@@ -44,11 +50,13 @@ Creates a PDF file for the main latex file in the repository with commit
 information printed as a banner down the left hand margin on each page.
 
 Examples:
+## .. code:: bash
   > git lpdf           # produces time-stamped "Latest version" of main latex file
   > git lpdf b675cdf   # produces pdf file for main latex file as of commit b675cdf
   > git lpdf --main myfile.tex # produces pdf file for my file as of commit b675cdf
 
 By default the script uses pdflatex. This can be changed using the --latex option:
+## .. code:: bash
   > git lpdf --latex   # produces time-stamped "Latest version" of main latex file
 
 Usage for ldiff script
@@ -63,6 +71,7 @@ in the current repository, however, we also allow them to be --, for the files
 in the current working directory, or another directory.
 
 Examples:
+## .. code:: bash
   > git ldiff   # compare most recent commit with current (uncommited) version
   > git ldiff --main myfile.tex  # compare most recent commit for myfile  with current version
   > git ldiff <commit> # compare commit with current verion
@@ -98,4 +107,4 @@ PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 .. _latexdiff: http://www.ctan.org/pkg/latexdiff
 .. _GPL: http://www.gnu.org/licenses/gpl.html
 
-.. Automatically generated Mon 24 Nov 2014 23:30:13 AEDT.
+.. Automatically generated Mon 24 Nov 2014 23:36:44 AEDT.
