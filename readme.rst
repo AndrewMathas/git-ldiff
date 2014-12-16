@@ -1,7 +1,7 @@
 ======================
 git-lpdf and git-ldiff
 ======================
- 
+
 A bash script for producing pdf files from a git repository that tracks latex
 documents. There are two modes:
  - lpdf:  produces a latex file for the given commit in the repository
@@ -14,17 +14,17 @@ The main idea of the script is to provide an easy way to produce a PDF file
 from a git repository that is clearly annotated with the commit data. For
 example:
 .. code:: bash
- 
+
    > git lpdf <commit>
 will produce a PDF file for the commit <commit> of the latex file in the current
 repository. Using latexdiff_, the command
 .. code:: bash
- 
+
    > git ldiff <commit>
 produces a PDF file that highlights the differences between the commit <commit> and the current
 working copy of the latex file in the current repository. Similarly,
 .. code:: bash
- 
+
    > git ldiff <commit1> <commit1>
 produces a PDf file showing he differences between two commits.
   

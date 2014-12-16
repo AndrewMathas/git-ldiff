@@ -388,8 +388,13 @@ while [[ $# -ne 0 ]]; do
         location=$HOME/bin
         [[ ! -d $location ]] && exit_with_error "--install <dir>: dir must be a directory"
       fi
-      [[ $0 != $location/git-lpdf ]] && ln -s $0 $location/git-lpdf
-      ln -s $0 $location/git-ldiff
+      case $(dirname $0) in
+        \.) me="$(pwd)/$(basename $0)" ;;
+         *) me=$0 ;;
+      esac
+      echo "Linking to $me"
+      [[ $0 != $location/git-lpdf ]] && ln -s $me $location/git-lpdf
+      ln -s $me $location/git-ldiff
       exit 0
       ;;
     --readme)
