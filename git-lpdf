@@ -37,10 +37,14 @@
 ## Installation
 ## ============
 ##   
-## Clone the git repository, or download the shell script, and then type:
-##   ./git-ldiff --install [directory]   # directory defaults to /Users/andrew/bin
-## This will create two links, git-lpdf and git-ldiff, in the specified directory
-## to the shell script git-ldiff. This directory should be in your path.
+## Clone the git repository, or download the shell script, and then type either:
+##   ./git-ldiff --install [directory]   # directory defaults to $HOME/bin
+## or 
+##   ./git-ldiff --linkinstall [directory]   # directory defaults to $HOME/bin
+## The first version copies the script to <directory>/git-lpdf and creates a
+## link from <directory>/git-ldiff to <directory>/git-lpdf  The second variation
+## creates two links to the script in its current location, which is useful if
+## you have cloned the git repository for git-lpdf.
 ##   
 ## The script makes use of the backgrounds_ package andlatexdiff_. Both of these
 ## are available from ctan and are automatically installed with TeXLive.
@@ -387,6 +391,18 @@ while [[ $# -ne 0 ]]; do
       else
         location=$HOME/bin
         [[ ! -d $location ]] && exit_with_error "--install <dir>: dir must be a directory"
+      fi
+      cp $0 $location/git-lpdf
+      ln -s $location/git-lpdf $location/git-ldiff
+      exit 0
+      ;;
+   --linkinstall)
+      if [[ $# -gt 1 ]]; then
+        shift
+        location=$1
+      else
+        location=$HOME/bin
+        [[ ! -d $location ]] && exit_with_error "--linkinstall <dir>: dir must be a directory"
       fi
       case $(dirname $0) in
         \.) me="$(pwd)/$(basename $0)" ;;

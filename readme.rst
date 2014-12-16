@@ -1,7 +1,7 @@
 ======================
 git-lpdf and git-ldiff
 ======================
-
+ 
 A bash script for producing pdf files from a git repository that tracks latex
 documents. There are two modes:
  - lpdf:  produces a latex file for the given commit in the repository
@@ -14,17 +14,17 @@ The main idea of the script is to provide an easy way to produce a PDF file
 from a git repository that is clearly annotated with the commit data. For
 example:
 .. code:: bash
-
+ 
    > git lpdf <commit>
 will produce a PDF file for the commit <commit> of the latex file in the current
 repository. Using latexdiff_, the command
 .. code:: bash
-
+ 
    > git ldiff <commit>
 produces a PDF file that highlights the differences between the commit <commit> and the current
 working copy of the latex file in the current repository. Similarly,
 .. code:: bash
-
+ 
    > git ldiff <commit1> <commit1>
 produces a PDf file showing he differences between two commits.
   
@@ -35,10 +35,14 @@ Andrew Mathas June 2014
 Installation
 ============
   
-Clone the git repository, or download the shell script, and then type:
-  ./git-ldiff --install [directory]   # directory defaults to /Users/andrew/bin
-This will create two links, git-lpdf and git-ldiff, in the specified directory
-to the shell script git-ldiff. This directory should be in your path.
+Clone the git repository, or download the shell script, and then type either:
+  ./git-ldiff --install [directory]   # directory defaults to $HOME/bin
+or 
+  ./git-ldiff --linkinstall [directory]   # directory defaults to $HOME/bin
+The first version copies the script to <directory>/git-lpdf and creates a
+link from <directory>/git-ldiff to <directory>/git-lpdf  The second variation
+creates two links to the script in its current location, which is useful if
+you have cloned the git repository for git-lpdf.
   
 The script makes use of the backgrounds_ package andlatexdiff_. Both of these
 are available from ctan and are automatically installed with TeXLive.
@@ -112,4 +116,4 @@ PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 .. _latexdiff: http://www.ctan.org/pkg/latexdiff
 .. _GPL: http://www.gnu.org/licenses/gpl.html
 
-.. Automatically generated Mon 24 Nov 2014 23:46:11 AEDT.
+.. Automatically generated Wed 17 Dec 2014 00:26:28 AEDT.
