@@ -153,12 +153,12 @@ By default the script uses pdflatex. This can be changed using the --latex optio
 END_USAGE
 )"
 
-# print usage methods
+# print usage messages, stripping out code-blocks and any repeated (blank) lines
 function usage()
 {
   case $prog in
-    ldiff) echo "$ldiff_usage" ;;
-    lpdf)  echo "$lpdf_usage" ;;
+    ldiff) echo "$ldiff_usage" | grep -v code-block | uniq;;
+    lpdf)  echo "$lpdf_usage"  | grep -v code-block | uniq;;
   esac
 }
 
