@@ -14,14 +14,14 @@ The main idea of the script is to provide an easy way to produce a PDF file
 from a git repository that is clearly annotated with the commit data. For
 example.
  
-.. code:: bash
+.. code-block:: bash
  
    > git lpdf <commit>
  
 will produce a PDF file for the commit <commit> of the latex file in the current
 repository. Using latexdiff_, the command
  
-.. code:: bash
+.. code-block:: bash
  
    > git ldiff <commit>
  
@@ -29,7 +29,7 @@ produces a PDF file that highlights the differences between the commit
 <commit> and the current ## working copy of the latex file in the current
 repository. Similarly,
  
-.. code:: bash
+.. code-block:: bash
  
    > git ldiff <commit1> <commit1>
  
@@ -44,13 +44,13 @@ Installation
   
 Clone the git repository, or download the shell script, and then type either:
  
-.. code:: bash
+.. code-block:: bash
  
   ./git-ldiff --install [directory]   # directory defaults to $HOME/bin
  
 or 
  
-.. code:: bash
+.. code-block:: bash
  
   ./git-ldiff --linkinstall [directory]   # directory defaults to $HOME/bin
  
@@ -71,7 +71,7 @@ information printed as a banner down the left hand margin on each page.
 
 Examples:
 
-.. code:: bash
+.. code-block:: bash
 
   > git lpdf           # produces time-stamped "Latest version" of main latex file
   > git lpdf b675cdf   # produces pdf file for main latex file as of commit b675cdf
@@ -79,7 +79,7 @@ Examples:
 
 By default the script uses pdflatex. This can be changed using the --latex option:
 
-.. code:: bash
+.. code-block:: bash
 
   > git lpdf --latex   # produces time-stamped "Latest version" of main latex file
 
@@ -96,16 +96,15 @@ in the current working directory, or another directory.
 
 Examples:
 
-.. code:: bash
+.. code-block:: bash
 
   > git ldiff   # compare most recent commit with current (uncommited) version
   > git ldiff --main myfile.tex  # compare most recent commit for myfile  with current version
   > git ldiff <commit> # compare commit with current verion
   > git ldiff <dirame> [commit] # compare version in directory <dirname> with specified commit
 
- There are also --safe and --verysafe options that are sometimes more
- successful in getting latexdiff to work.
-    
+There are also --safe and --verysafe options that are sometimes more
+successful in getting latexdiff to work.
 
 To do
 -----
@@ -126,7 +125,7 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 
-Automatically generated Sun 21 Dec 2014 23:30:04 AEDT.
+Automatically generated Sun 21 Dec 2014 23:33:03 AEDT.
 
 .. References
 .. ..........
