@@ -6,8 +6,8 @@
 ##  
 ## A bash script for producing pdf files from a git repository that tracks latex
 ## documents. There are two modes:
-##  - lpdf:  produces a latex file for the given commit in the repository
-##  - ldiff: uses latexdiff to create a pdf file that highlights the differences between commits
+## - lpdf:  produces a latex file for the given commit in the repository
+## - ldiff: uses latexdiff to create a pdf file that highlights the differences between commits
 ## This script is partially motivated by the script git-latexdiff_ and my
 ## attempts to get it to work the way that I wanted. The date and commit information is printed 
 ## as a banner on the PDF files. This script should be used from inside git.
@@ -18,16 +18,19 @@
 ## .. code:: bash
 ##  
 ##    > git lpdf <commit>
+##  
 ## will produce a PDF file for the commit <commit> of the latex file in the current
 ## repository. Using latexdiff_, the command
 ## .. code:: bash
 ##  
 ##    > git ldiff <commit>
+##  
 ## produces a PDF file that highlights the differences between the commit <commit> and the current
 ## working copy of the latex file in the current repository. Similarly,
 ## .. code:: bash
 ##  
 ##    > git ldiff <commit1> <commit1>
+##  
 ## produces a PDf file showing he differences between two commits.
 ##   
 ## In all cases the commit information is printed on all pages of the PDF.
@@ -35,19 +38,25 @@
 ## Andrew Mathas June 2014
 ##   
 ## Installation
-## ============
+## ------------
 ##   
 ## Clone the git repository, or download the shell script, and then type either:
+## .. code:: bash
+##  
 ##   ./git-ldiff --install [directory]   # directory defaults to $HOME/bin
+##  
 ## or 
+## .. code:: bash
+##  
 ##   ./git-ldiff --linkinstall [directory]   # directory defaults to $HOME/bin
+##  
 ## The first version copies the script to <directory>/git-lpdf and creates a
 ## link from <directory>/git-ldiff to <directory>/git-lpdf  The second variation
 ## creates two links to the script in its current location, which is useful if
 ## you have cloned the git repository for git-lpdf.
 ##   
-## The script makes use of the backgrounds_ package andlatexdiff_. Both of these
-## are available from ctan and are automatically installed with TeXLive.
+## The script makes use of the background_ package and latexdiff_. Both of these
+## packages are available from ctan_ and they are automatically installed with TeXLive.
 
 function exit_with_error()
 {
@@ -151,20 +160,20 @@ function generate_readme()
 {
   readme="$(dirname $0)/readme.rst"
   egrep "^##\s+" $0 | sed -E 's/^##[[:space:]]{0,1}//' > $readme  # macosx specific
-  echo -e "\nUsage for lpdf script\n=====================" >> $readme
+  echo -e "\nUsage for lpdf script\n---------------------" >> $readme
   echo -e "$lpdf_usage" >> $readme
-  echo -e "\nUsage for ldiff script\n======================" >> $readme
+  echo -e "\nUsage for ldiff script\n----------------------" >> $readme
   echo -e "$ldiff_usage" >> $readme
   cat <<End_of_Links >> $readme
 
 To do
-=====
+-----
  - better handling of latexdiff options
  - clean up the argument parsing
  - improve documentation 
 
 Licence
-=======
+-------
 GNU General Public License, Version 3, 29 June 2007
 
 This program is free software: you can redistribute it and/or modify it under
@@ -176,15 +185,15 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 
+Automatically generated $(date).
 
 .. References
 .. ..........
 .. _background: http://www.ctan.org/pkg/background
+.. _ctan: http://www.ctan.org/
 .. _git-latexdiff: https://gitorious.org/git-latexdiff
 .. _latexdiff: http://www.ctan.org/pkg/latexdiff
 .. _GPL: http://www.gnu.org/licenses/gpl.html
-
-.. Automatically generated $(date).
 End_of_Links
 }
 
@@ -198,12 +207,13 @@ function extract_git_files
   else
     tmp="$tmp_dir"
   fi
+  mkdir -p $tmp
   if [[ "$sha" = "--" ]]; then
     # $target_dir to $top_dir
-    /bin/cp -R "$top_dir/" "$tmp"
+    /bin/cp -f "$top_dir/$tracked_files" "$tmp/"
   elif [[ -d "$sha" ]]; then
     # $target_dir to $top_dir
-    /bin/cp -R "$sha/" "$tmp"
+    /bin/cp -f "$sha/$tracked_files" "$tmp/"
   else
     # extract files git archive into $tmp
     cd "$git_dir" || exit_with_error "unable to cd to git directory $git_dir"
@@ -269,8 +279,8 @@ function ldiff()
   [[ "$old_commit" = "$new_commit" ]] && exit_with_error "You are comparing same the sha1's!"
 
   # extract the archived files
-  extract_git_files $old_commit old
-  extract_git_files $new_commit new
+  extract_git_files $old_commit old  # copy to /tmp/old
+  extract_git_files $new_commit new  # copy to /tmp/new
 
   # now create the latexdiff file
   cd $tmp_dir
@@ -434,14 +444,21 @@ done
 [[ -z $new_commit ]] && new_commit=$new_commit_default
 
 # If the tex_file has not been specified we try to guess it and exit if the
-# repository contains more than one tex file.
+# repository contains more than one tex file with a \documentclass commend..
 if [[ -z "$tex_file" ]] ; then
-  tex_file="$(git grep -l '^[ \t]*\\documentclass')"
+  tex_file="$(git grep -l '^\s*\\documentclass')"
   [[ ! -r "$tex_file" ]] && exit_with_error "Tex file ambiguous. Specify filename using --main"
 elif [[ ! -r "$tex_file" ]]; then
   exit_with_error "Unable to read file $tex_file"
 fi
 pdf_file=${tex_file/.tex/.pdf}
+
+# create a string of trackes files in the git repository
+if [[ $(git ls-files | wc -l) -gt 1 ]]; then
+  tracked_files="{$(git ls-files | xargs | sed 's@ @,@')}"
+else
+  tracked_files="$(git ls-files)"
+fi
 
 # if using the default tmp directory then delete it otherwise try to create it.
 [[ $tmp_dir = "/tmp/$prog" ]] && /bin/rm -Rf /tmp/$prog

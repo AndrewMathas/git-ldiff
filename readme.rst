@@ -1,11 +1,11 @@
 ======================
 git-lpdf and git-ldiff
 ======================
- 
+
 A bash script for producing pdf files from a git repository that tracks latex
 documents. There are two modes:
- - lpdf:  produces a latex file for the given commit in the repository
- - ldiff: uses latexdiff to create a pdf file that highlights the differences between commits
+- lpdf:  produces a latex file for the given commit in the repository
+- ldiff: uses latexdiff to create a pdf file that highlights the differences between commits
 This script is partially motivated by the script git-latexdiff_ and my
 attempts to get it to work the way that I wanted. The date and commit information is printed 
 as a banner on the PDF files. This script should be used from inside git.
@@ -14,18 +14,21 @@ The main idea of the script is to provide an easy way to produce a PDF file
 from a git repository that is clearly annotated with the commit data. For
 example:
 .. code:: bash
- 
+
    > git lpdf <commit>
+
 will produce a PDF file for the commit <commit> of the latex file in the current
 repository. Using latexdiff_, the command
 .. code:: bash
- 
+
    > git ldiff <commit>
+
 produces a PDF file that highlights the differences between the commit <commit> and the current
 working copy of the latex file in the current repository. Similarly,
 .. code:: bash
- 
+
    > git ldiff <commit1> <commit1>
+
 produces a PDf file showing he differences between two commits.
   
 In all cases the commit information is printed on all pages of the PDF.
@@ -33,22 +36,28 @@ In all cases the commit information is printed on all pages of the PDF.
 Andrew Mathas June 2014
   
 Installation
-============
+------------
   
 Clone the git repository, or download the shell script, and then type either:
+code:: bash
+
   ./git-ldiff --install [directory]   # directory defaults to $HOME/bin
+
 or 
+code:: bash
+
   ./git-ldiff --linkinstall [directory]   # directory defaults to $HOME/bin
+
 The first version copies the script to <directory>/git-lpdf and creates a
 link from <directory>/git-ldiff to <directory>/git-lpdf  The second variation
 creates two links to the script in its current location, which is useful if
 you have cloned the git repository for git-lpdf.
   
-The script makes use of the backgrounds_ package andlatexdiff_. Both of these
-are available from ctan and are automatically installed with TeXLive.
+The script makes use of the background_ package and latexdiff_. Both of these
+packages are available from ctan_ and they are automatically installed with TeXLive.
 
 Usage for lpdf script
-=====================
+---------------------
 Usage: git lpdf [--main file] [--latex latex executable] [commit]
 
 Creates a PDF file for the main latex file in the repository with commit
@@ -67,7 +76,7 @@ By default the script uses pdflatex. This can be changed using the --latex optio
   > git lpdf --latex   # produces time-stamped "Latest version" of main latex file
 
 Usage for ldiff script
-======================
+----------------------
 Usage: git ldiff [--main file] [--latex latex executable] [OLD] [NEW]
 
 To use this mode you need to have latexdiff_ installed.
@@ -90,13 +99,13 @@ Examples:
     
 
 To do
-=====
+-----
  - better handling of latexdiff options
  - clean up the argument parsing
  - improve documentation 
 
 Licence
-=======
+-------
 GNU General Public License, Version 3, 29 June 2007
 
 This program is free software: you can redistribute it and/or modify it under
@@ -108,12 +117,12 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 
+Automatically generated Sat 20 Dec 2014 12:09:45 AEDT.
 
 .. References
 .. ..........
 .. _background: http://www.ctan.org/pkg/background
+.. _ctan: http://www.ctan.org/
 .. _git-latexdiff: https://gitorious.org/git-latexdiff
 .. _latexdiff: http://www.ctan.org/pkg/latexdiff
 .. _GPL: http://www.gnu.org/licenses/gpl.html
-
-.. Automatically generated Wed 17 Dec 2014 00:26:28 AEDT.
