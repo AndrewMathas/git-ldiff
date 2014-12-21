@@ -1,7 +1,7 @@
 ======================
 git-lpdf and git-ldiff
 ======================
-
+ 
 A bash script for producing pdf files from a git repository that tracks latex
 documents. There are two modes:
 - lpdf:  produces a latex file for the given commit in the repository
@@ -12,23 +12,27 @@ as a banner on the PDF files. This script should be used from inside git.
   
 The main idea of the script is to provide an easy way to produce a PDF file
 from a git repository that is clearly annotated with the commit data. For
-example:
+example.
+ 
 .. code:: bash
-
+ 
    > git lpdf <commit>
-
+ 
 will produce a PDF file for the commit <commit> of the latex file in the current
 repository. Using latexdiff_, the command
+ 
 .. code:: bash
-
+ 
    > git ldiff <commit>
-
-produces a PDF file that highlights the differences between the commit <commit> and the current
-working copy of the latex file in the current repository. Similarly,
+ 
+produces a PDF file that highlights the differences between the commit
+<commit> and the current ## working copy of the latex file in the current
+repository. Similarly,
+ 
 .. code:: bash
-
+ 
    > git ldiff <commit1> <commit1>
-
+ 
 produces a PDf file showing he differences between two commits.
   
 In all cases the commit information is printed on all pages of the PDF.
@@ -39,15 +43,17 @@ Installation
 ------------
   
 Clone the git repository, or download the shell script, and then type either:
-code:: bash
-
+ 
+.. code:: bash
+ 
   ./git-ldiff --install [directory]   # directory defaults to $HOME/bin
-
+ 
 or 
-code:: bash
-
+ 
+.. code:: bash
+ 
   ./git-ldiff --linkinstall [directory]   # directory defaults to $HOME/bin
-
+ 
 The first version copies the script to <directory>/git-lpdf and creates a
 link from <directory>/git-ldiff to <directory>/git-lpdf  The second variation
 creates two links to the script in its current location, which is useful if
@@ -64,6 +70,7 @@ Creates a PDF file for the main latex file in the repository with commit
 information printed as a banner down the left hand margin on each page.
 
 Examples:
+
 .. code:: bash
 
   > git lpdf           # produces time-stamped "Latest version" of main latex file
@@ -71,6 +78,7 @@ Examples:
   > git lpdf --main myfile.tex # produces pdf file for my file as of commit b675cdf
 
 By default the script uses pdflatex. This can be changed using the --latex option:
+
 .. code:: bash
 
   > git lpdf --latex   # produces time-stamped "Latest version" of main latex file
@@ -87,6 +95,7 @@ in the current repository, however, we also allow them to be --, for the files
 in the current working directory, or another directory.
 
 Examples:
+
 .. code:: bash
 
   > git ldiff   # compare most recent commit with current (uncommited) version
@@ -117,7 +126,7 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 
-Automatically generated Sat 20 Dec 2014 12:09:45 AEDT.
+Automatically generated Sun 21 Dec 2014 23:30:04 AEDT.
 
 .. References
 .. ..........

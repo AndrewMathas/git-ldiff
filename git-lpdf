@@ -14,19 +14,23 @@
 ##   
 ## The main idea of the script is to provide an easy way to produce a PDF file
 ## from a git repository that is clearly annotated with the commit data. For
-## example:
+## example.
+##  
 ## .. code:: bash
 ##  
 ##    > git lpdf <commit>
 ##  
 ## will produce a PDF file for the commit <commit> of the latex file in the current
 ## repository. Using latexdiff_, the command
+##  
 ## .. code:: bash
 ##  
 ##    > git ldiff <commit>
 ##  
-## produces a PDF file that highlights the differences between the commit <commit> and the current
-## working copy of the latex file in the current repository. Similarly,
+## produces a PDF file that highlights the differences between the commit
+## <commit> and the current ## working copy of the latex file in the current
+## repository. Similarly,
+##  
 ## .. code:: bash
 ##  
 ##    > git ldiff <commit1> <commit1>
@@ -41,11 +45,13 @@
 ## ------------
 ##   
 ## Clone the git repository, or download the shell script, and then type either:
+##  
 ## .. code:: bash
 ##  
 ##   ./git-ldiff --install [directory]   # directory defaults to $HOME/bin
 ##  
 ## or 
+##  
 ## .. code:: bash
 ##  
 ##   ./git-ldiff --linkinstall [directory]   # directory defaults to $HOME/bin
@@ -111,6 +117,7 @@ in the current repository, however, we also allow them to be --, for the files
 in the current working directory, or another directory.
 
 Examples:
+
 .. code:: bash
 
   > git ldiff   # compare most recent commit with current (uncommited) version
@@ -132,6 +139,7 @@ Creates a PDF file for the main latex file in the repository with commit
 information printed as a banner down the left hand margin on each page.
 
 Examples:
+
 .. code:: bash
 
   > git lpdf           # produces time-stamped "Latest version" of main latex file
@@ -139,6 +147,7 @@ Examples:
   > git lpdf --main myfile.tex # produces pdf file for my file as of commit b675cdf
 
 By default the script uses pdflatex. This can be changed using the --latex option:
+
 .. code:: bash
 
   > git lpdf --latex   # produces time-stamped "Latest version" of main latex file
