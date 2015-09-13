@@ -64,6 +64,22 @@
 ## The script makes use of the background_ package and latexdiff_. Both of these
 ## packages are available from ctan_ and they are automatically installed with TeXLive.
 
+# defaults
+cleaning="yes"
+banner=""
+debugging="no"
+latex="pdflatex -interaction=nonstopmode"
+latex_opt=""
+open="open"   # sensible default only on macosx
+old_commit=""
+new_commit=""
+tex_file=""
+latexdiff_type="CULINECHBAR"
+ldiff_options=" --flatten --ignore-warnings --subtype=COLOR "
+if [[ -r $HOME/.latexdiffrc ]]; then
+  ldiff_options="${ldiff_options} -c $HOME/.latexdiffrc"
+fi
+
 function exit_with_error()
 {
   echo "$prog error: $*"
@@ -77,16 +93,6 @@ case $(basename $0) in
   *)      exit_with_error "usage: invalid program name" ;;
 esac
 
-cleaning="yes"
-debugging="no"
-latex="pdflatex -interaction=batchmode"
-latex_opt=""
-open="open"   # sensible default only on macosx
-old_commit=""
-new_commit=""
-tex_file=""
-latexdiff_type="CFONT"
-
 top_dir=$(PWD)       # save the current working directory
 tmp_dir="/tmp/$prog" # default temporary directory
 
@@ -95,10 +101,6 @@ case $prog in
   ldiff)
     old_commit_default="HEAD"
     new_commit_default="--"
-    ldiff_options="--subtype=MARGIN --flatten --ignore-warnings"
-    if [[ -r $HOME/.latexdiffrc ]]; then
-      ldiff_options="${ldiff_options} -c $HOME/.latexdiffrc"
-    fi
     ;;
   lpdf)
     old_commit_default="--"
@@ -142,6 +144,7 @@ Examples:
 
   > git lpdf           # produces time-stamped "Latest version" of main latex file
   > git lpdf b675cdf   # produces pdf file for main latex file as of commit b675cdf
+  > git lpdf <directory> [commit] # compare file in given directory with commit
   > git lpdf --main myfile.tex # produces pdf file for my file as of commit b675cdf
 
 By default the script uses pdflatex. This can be changed using the --latex option:
@@ -225,7 +228,7 @@ function extract_git_files
     # extract files git archive into $tmp
     cd "$git_dir" || exit_with_error "unable to cd to git directory $git_dir"
     if [[ $# -eq 2 ]]; then
-      mkdir $tmp || exit_with_error "unable to create directory $tmp"
+      mkdir -p $tmp || exit_with_error "unable to create directory $tmp"
     fi
     git archive --format=tar "$sha" | tar -xC $tmp -f - || exit_with_error "unable to extract files from $sha"
   fi
@@ -235,7 +238,12 @@ function extract_git_files
 # usage: add_banner_to_TeX_file<filename> <banner>
 function add_banner_to_TeX_file()
 {
-  banner="usepackage{background}\\\\backgroundsetup{position={-1,1},anchor=left,angle=90,scale=1.2,pages=all,opacity=1,contents={$2}}\\\\"
+  if [[ -z $banner ]] ; then
+    content=$2
+  else
+    content=$banner
+  fi
+  banner="usepackage{background}\\\\backgroundsetup{position={-1,1},anchor=left,angle=90,scale=1.2,pages=all,opacity=1,contents={$content}}\\\\"
   sed -i.bak  "s@begin{document}@${banner}&@" "$1"
 }
 
@@ -300,7 +308,7 @@ function ldiff()
 
   # finally, if we are cleaning up then move the pdf file to $top_dir and
   # delete all of the files in $tmp_dir
-  if [[ -r $pdf_file && $cleaning = "yes" ]]; then
+  if [[ -r $pdf_file && "$cleaning" = "yes" ]]; then
     pdf_changes=$top_dir/${pdf_file/.pdf/-changes.pdf}
     /bin/mv $tmp_dir/$pdf_file $pdf_changes
     $open $pdf_changes
@@ -318,6 +326,7 @@ function lpdf()
   # determine banner to specify the commit on each page of the $tex_file
   if [[ "$old_commit" = "--" ]]; then
     commit_message=$(date "+Latest version: %a %d %b %Y")
+    old_comment="Latest"
   else
     commit_message=$(git log --pretty='format:%ad, %s, %h' --date=local -n 1 $old_commit)
   fi
@@ -334,11 +343,11 @@ function lpdf()
   if [[ ! -r $pdf_file ]]; then
     echo "No pdf file produced"
   elif [[ $cleaning = "yes" ]]; then
-    /bin/mv $tmp_dir/$pdf_file $top_dir/$pdf_file
-    $open -n $top_dir/$pdf_file
+    /bin/mv $tmp_dir/$pdf_file $top_dir/${old_commit}-$pdf_file
+    $open -n $top_dir/${old_commit}-$pdf_file
     /bin/rm -Rf $tmp_dir
   else
-    $open $pdf_file
+    $open $tmp_dir/$pdf_file
   fi
 }
 
@@ -350,6 +359,11 @@ git_dir="$(git rev-parse --show-toplevel)/.git"
 while [[ $# -ne 0 ]]; do
   case $1 in
     -h|--help) usage && exit ;;
+    --banner|-b)
+      shift
+      [[ $# -eq 0 ]] && exit_with_error "--banner requires an argument"
+      banner="$1" && shift
+      ;;
     --main|-m)
       shift
       [[ $# -eq 0 ]] && exit_with_error "--main requires an argument"
@@ -453,14 +467,14 @@ done
 # If the tex_file has not been specified we try to guess it and exit if the
 # repository contains more than one tex file with a \documentclass commend..
 if [[ -z "$tex_file" ]] ; then
-  tex_file="$(git grep -l '^\s*\\documentclass')"
-  [[ ! -r "$tex_file" ]] && exit_with_error "Tex file ambiguous. Specify filename using --main"
+  tex_file="$(git ls-files | grep .tex)"
+  [[ ! -r "$tex_file" ]] && exit_with_error "Tex file <$tex_file> is ambiguous. Specify filename using --main (found $tex_file)"
 elif [[ ! -r "$tex_file" ]]; then
   exit_with_error "Unable to read file $tex_file"
 fi
 pdf_file=${tex_file/.tex/.pdf}
 
-# create a string of trackes files in the git repository
+# create a string of tracked files in the git repository
 if [[ $(git ls-files | wc -l) -gt 1 ]]; then
   tracked_files="{$(git ls-files | xargs | sed 's@ @,@')}"
 else
@@ -470,7 +484,7 @@ fi
 # if using the default tmp directory then delete it otherwise try to create it.
 [[ $tmp_dir = "/tmp/$prog" ]] && /bin/rm -Rf /tmp/$prog
 if [[ ! -d "$tmp_dir" ]] ; then
-  mkdir $tmp_dir || exit_with_error "unable to create temporary directory $tmp_dir"
+  mkdir -p $tmp_dir || exit_with_error "unable to create temporary directory $tmp_dir"
 fi
 
 # print debugging information if requested
