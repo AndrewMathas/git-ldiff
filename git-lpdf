@@ -1,4 +1,4 @@
-#!/bin/bash -f
+#!/usr/bin/env bash
 
 ## ======================
 ## git-lpdf and git-ldiff
@@ -75,7 +75,7 @@ old_commit=""
 new_commit=""
 tex_file=""
 latexdiff_type="CULINECHBAR"
-ldiff_options=" --flatten --ignore-warnings --subtype=COLOR "
+ldiff_options=" --flatten --ignore-warnings --packages=amsmath,hyperref --subtype=COLOR "
 if [[ -r $HOME/.latexdiffrc ]]; then
   ldiff_options="${ldiff_options} -c $HOME/.latexdiffrc"
 fi
@@ -113,6 +113,18 @@ Usage: git ldiff [--main file] [--latex latex executable] [OLD] [NEW]
 
 To use this mode you need to have latexdiff_ installed.
 
+The following command line options are supported:
+
+  -b|--banner <banner>  : set the banner printed in the left-hand margin
+  -d|--debug            : debug mode
+  -l|--latex            : set latex executable
+     --latex-opt        : commandline options passed to latex
+  -m|--main   <texfile> : set the name of the main latex file
+  -s|--safe             : more robust diff of mathematics by latexdiff
+  -S|--verysafe         : very robust diff of mathematics by latexdiff
+  -t|--tmp              : set temporary directory used during compilation
+  -T|--latexdiff-type   : specify type of diff used by latexdiff
+
 By default the files in the HEAD of the git repository are compared with
 the files in current working directory. Ostensibly, OLD and NEW are git shas
 in the current repository, however, we also allow them to be --, for the files
@@ -137,6 +149,14 @@ Usage: git lpdf [--main file] [--latex latex executable] [commit]
 
 Creates a PDF file for the main latex file in the repository with commit
 information printed as a banner down the left hand margin on each page.
+
+The following command line options are supported:
+
+  -b|--banner <banner>  : set the banner printed in the left-hand margin
+  -d|--debug            : debug mode
+  -l|--latex            : set latex executable
+     --latex-opt        : commandline options passed to latex
+  -m|--main   <texfile> : set the name of the main latex file
 
 Examples:
 
@@ -220,10 +240,13 @@ function extract_git_files
   mkdir -p $tmp
   if [[ "$sha" = "--" ]]; then
     # $target_dir to $top_dir
-    /bin/cp -f "$top_dir/$tracked_files" "$tmp/"
+    for f in $tracked_files; do
+      echo "Copying >$f<"
+      /bin/cp -f "$top_dir/$f" "$tmp/"
+    done
   elif [[ -d "$sha" ]]; then
     # $target_dir to $top_dir
-    /bin/cp -f "$sha/$tracked_files" "$tmp/"
+    /bin/cp -f $sha/"$tracked_files" "$tmp/"
   else
     # extract files git archive into $tmp
     cd "$git_dir" || exit_with_error "unable to cd to git directory $git_dir"
@@ -476,7 +499,7 @@ pdf_file=${tex_file/.tex/.pdf}
 
 # create a string of tracked files in the git repository
 if [[ $(git ls-files | wc -l) -gt 1 ]]; then
-  tracked_files="{$(git ls-files | xargs | sed 's@ @,@')}"
+  tracked_files="$(git ls-files|xargs)"
 else
   tracked_files="$(git ls-files)"
 fi
