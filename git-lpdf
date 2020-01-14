@@ -33,7 +33,7 @@
 ##  
 ## .. code-block:: bash
 ##  
-##    > git ldiff <commit1> <commit1>
+##    > git ldiff <commit1> <commit2>
 ##  
 ## produces a PDf file showing he differences between two commits.
 ##   
