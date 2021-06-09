@@ -241,12 +241,13 @@ function extract_git_files
   if [[ "$sha" = "--" ]]; then
     # $target_dir to $top_dir
     for f in $tracked_files; do
-      echo "Copying >$f<"
       /bin/cp -f "$top_dir/$f" "$tmp/"
     done
   elif [[ -d "$sha" ]]; then
     # $target_dir to $top_dir
-    /bin/cp -f $sha/"$tracked_files" "$tmp/"
+    for f in $tracked_files; do
+        /bin/cp -f $sha/"$f" "$tmp/"
+    done
   else
     # extract files git archive into $tmp
     cd "$git_dir" || exit_with_error "unable to cd to git directory $git_dir"
