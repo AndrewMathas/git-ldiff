@@ -3,64 +3,64 @@
 ## ======================
 ## git-lpdf and git-ldiff
 ## ======================
-##  
+##
 ## A bash script for producing pdf files from a git repository that tracks latex
 ## documents. There are two modes:
 ## - lpdf:  produces a latex file for the given commit in the repository
 ## - ldiff: uses latexdiff to create a pdf file that highlights the differences between commits
 ## This script is partially motivated by the script git-latexdiff_ and my
-## attempts to get it to work the way that I wanted. The date and commit information is printed 
+## attempts to get it to work the way that I wanted. The date and commit information is printed
 ## as a banner on the PDF files. This script should be used from inside git.
-##   
+##
 ## The main idea of the script is to provide an easy way to produce a PDF file
 ## from a git repository that is clearly annotated with the commit data. For
 ## example.
-##  
+##
 ## .. code-block:: bash
-##  
+##
 ##    > git lpdf <commit>
-##  
+##
 ## will produce a PDF file for the commit <commit> of the latex file in the current
 ## repository. Using latexdiff_, the command
-##  
+##
 ## .. code-block:: bash
-##  
+##
 ##    > git ldiff <commit>
-##  
+##
 ## produces a PDF file that highlights the differences between the commit
 ## <commit> and the current ## working copy of the latex file in the current
 ## repository. Similarly,
-##  
+##
 ## .. code-block:: bash
-##  
+##
 ##    > git ldiff <commit1> <commit2>
-##  
+##
 ## produces a PDf file showing he differences between two commits.
-##   
+##
 ## In all cases the commit information is printed on all pages of the PDF.
-##   
+##
 ## Andrew Mathas June 2014
-##   
+##
 ## Installation
 ## ------------
-##   
+##
 ## Clone the git repository, or download the shell script, and then type either:
-##  
+##
 ## .. code-block:: bash
-##  
+##
 ##   ./git-ldiff --install [directory]   # directory defaults to $HOME/bin
-##  
-## or 
-##  
+##
+## or
+##
 ## .. code-block:: bash
-##  
+##
 ##   ./git-ldiff --linkinstall [directory]   # directory defaults to $HOME/bin
-##  
+##
 ## The first version copies the script to <directory>/git-lpdf and creates a
 ## link from <directory>/git-ldiff to <directory>/git-lpdf  The second variation
 ## creates two links to the script in its current location, which is useful if
 ## you have cloned the git repository for git-lpdf.
-##   
+##
 ## The script makes use of the background_ package and latexdiff_. Both of these
 ## packages are available from ctan_ and they are automatically installed with TeXLive.
 
@@ -73,6 +73,7 @@ latex_opt=""
 open="open"   # sensible default only on macosx
 old_commit=""
 new_commit=""
+header=""
 tex_file=""
 latexdiff_type="CULINECHBAR"
 ldiff_options=" --flatten --ignore-warnings --packages=amsmath,hyperref --subtype=COLOR "
@@ -200,7 +201,7 @@ To do
 -----
  - better handling of latexdiff options
  - clean up the argument parsing
- - improve documentation 
+ - improve documentation
 
 Licence
 -------
@@ -327,7 +328,7 @@ function ldiff()
   [[ -r new/$tex_file ]] || exit_with_error "new/$tex_file does not exist"
   latexdiff $ldiff_options --type=$latexdiff_type "old/$tex_file" "new/$tex_file" | sed 's@@@g' > "$tex_file"
 
-  add_banner_to_TeX_file "$tex_file" "Latexdiff:  $old_commit \\\\quad$\\\\leftrightarrow$\\\\quad $new_commit"
+  add_banner_to_TeX_file "$tex_file" "$header"
   latex_file $tmp_dir $tex_file
 
   # finally, if we are cleaning up then move the pdf file to $top_dir and
@@ -487,6 +488,11 @@ done
 
 [[ -z $old_commit ]] && old_commit=$old_commit_default
 [[ -z $new_commit ]] && new_commit=$new_commit_default
+
+# by default the changes header lists the two diffs
+if [[ "$changes" ]] ; then
+  changes="\\\\LaTeX diff:  $old_commit \\\\quad$\\\\leftrightarrow$\\\\quad $new_commit"
+fi
 
 # If the tex_file has not been specified we try to guess it and exit if the
 # repository contains more than one tex file with a \documentclass commend..
