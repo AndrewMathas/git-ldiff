@@ -68,6 +68,7 @@
 cleaning="yes"
 banner=""
 debugging="no"
+keep_latex="no"
 latex="pdflatex -interaction=nonstopmode"
 latex_opt=""
 open="open"   # sensible default only on macosx
@@ -118,6 +119,7 @@ The following command line options are supported:
 
   -b|--banner <banner>  : set the banner printed in the left-hand margin
   -d|--debug            : debug mode
+  -k|--keep             : keep the changes LaTeXZ file
   -l|--latex            : set latex executable
      --latex-opt        : commandline options passed to latex
   -m|--main   <texfile> : set the name of the main latex file
@@ -324,22 +326,30 @@ function ldiff()
 
   # now create the latexdiff file
   cd $tmp_dir
-  [[ -r old/$tex_file ]] || exit_with_error "old/$tex_file does not exist"
-  [[ -r new/$tex_file ]] || exit_with_error "new/$tex_file does not exist"
+  [[ -r "old/$tex_file" ]] || exit_with_error "old/$tex_file does not exist"
+  [[ -r "new/$tex_file" ]] || exit_with_error "new/$tex_file does not exist"
   latexdiff $ldiff_options --type=$latexdiff_type "old/$tex_file" "new/$tex_file" | sed 's@@@g' > "$tex_file"
 
   add_banner_to_TeX_file "$tex_file" "$header"
-  latex_file $tmp_dir $tex_file
+
+  # change the blue for added text for ForestGreen
+  sed -E -i.bak 's@\\color{blue}(.*%DIF PREAMBLE)@\\color{ForestGreen}\1@' $tex_file
+
+  # latex the changes file
+  latex_file $tmp_dir "$tex_file"
 
   # finally, if we are cleaning up then move the pdf file to $top_dir and
   # delete all of the files in $tmp_dir
-  if [[ -r $pdf_file && "$cleaning" = "yes" ]]; then
-    pdf_changes=$top_dir/${pdf_file/.pdf/-changes.pdf}
-    /bin/mv $tmp_dir/$pdf_file $pdf_changes
-    $open $pdf_changes
+  if [[ -r "$pdf_file" && "$cleaning" = "yes" ]]; then
+    pdf_changes="$top_dir/${pdf_file/.pdf/-changes.pdf}"
+    /bin/mv "$tmp_dir/$pdf_file" "$pdf_changes"
+    if [[ $keep_latex = "yes" ]]; then
+        /bin/mv "$tmp_dir/$tex_file" "$top_dir/${tex_file/.tex/-changes.tex}"
+    fi
+    $open "$pdf_changes"
     /bin/rm -Rf $tmp_dir
   else
-    [[ -r $pdf_file ]] && $open $pdf_file
+    [[ -r "$pdf_file" ]] && $open $pdf_file
   fi
 }
 
@@ -361,18 +371,18 @@ function lpdf()
   [[ -r $tex_file ]] || exit_with_error "$tex_file does not exist"
   add_banner_to_TeX_file "$tex_file" "$commit_message"
 
-  latex_file $tmp_dir $tex_file
+  latex_file $tmp_dir "$tex_file"
 
   # finally, if we are cleaning up then move the pdf file to $top_dir and
   # delete all of the files in $tmp_dir
   if [[ ! -r $pdf_file ]]; then
     echo "No pdf file produced"
   elif [[ $cleaning = "yes" ]]; then
-    /bin/mv $tmp_dir/$pdf_file $top_dir/${old_commit}-$pdf_file
-    $open -n $top_dir/${old_commit}-$pdf_file
+    /bin/mv "$tmp_dir/$pdf_file" "$top_dir/${old_commit}-$pdf_file"
+    $open -n "$top_dir/${old_commit}-$pdf_file"
     /bin/rm -Rf $tmp_dir
   else
-    $open $tmp_dir/$pdf_file
+    $open "$tmp_dir/$pdf_file"
   fi
 }
 
@@ -424,6 +434,10 @@ while [[ $# -ne 0 ]]; do
       set -vx  # turn on inbuilt debugging
       debugging="yes"
       cleaning="no"
+      shift
+      ;;
+    --keep|-k)
+      keep_latex="yes"
       shift
       ;;
     --latexdiff-type|-T)
