@@ -1,209 +1,625 @@
-#!/usr/bin/env bash
-
+#!/usr/bin/env python3
 ## ======================
 ## git-lpdf and git-ldiff
 ## ======================
 ##
-## A bash script for producing pdf files from a git repository that tracks latex
-## documents. There are two modes:
-## - lpdf:  produces a latex file for the given commit in the repository
-## - ldiff: uses latexdiff to create a pdf file that highlights the differences between commits
-## This script is partially motivated by the script git-latexdiff_ and my
-## attempts to get it to work the way that I wanted. The date and commit information is printed
-## as a banner on the PDF files. This script should be used from inside git.
+## A python script for producing PDF files from a git repository that tracks
+## LaTeX documents. There are two modes:
+##
+## - lpdf:  produces a PDF file for a given commit in the repository
+## - ldiff: uses latexdiff to produce a PDF that highlights the differences
+##   between two commits
+##
+## In both cases the commit information is printed as a banner down the
+## left-hand margin of every page of the PDF. This script is partially
+## motivated by the script git-latexdiff_ and my attempts to get it to work the
+## way that I wanted. The script should be used from inside a git repository.
 ##
 ## The main idea of the script is to provide an easy way to produce a PDF file
 ## from a git repository that is clearly annotated with the commit data. For
-## example.
+## example,
 ##
 ## .. code-block:: bash
 ##
 ##    > git lpdf <commit>
 ##
-## will produce a PDF file for the commit <commit> of the latex file in the current
-## repository. Using latexdiff_, the command
+## produces a PDF file for the commit <commit> of the main LaTeX file in the
+## current repository. Using latexdiff_, the command
 ##
 ## .. code-block:: bash
 ##
 ##    > git ldiff <commit>
 ##
 ## produces a PDF file that highlights the differences between the commit
-## <commit> and the current ## working copy of the latex file in the current
-## repository. Similarly,
+## <commit> and the current working copy, and
 ##
 ## .. code-block:: bash
 ##
 ##    > git ldiff <commit1> <commit2>
 ##
-## produces a PDf file showing he differences between two commits.
+## produces a PDF file showing the differences between two commits.
 ##
-## In all cases the commit information is printed on all pages of the PDF.
+## Unlike the original bash implementation, LaTeX documents that are spread
+## over several directories are fully supported: the directory structure of the
+## repository is preserved when the files are extracted and LaTeX is run in the
+## directory containing the main file, so that relative \input and
+## \includegraphics paths resolve correctly.
 ##
 ## Andrew Mathas June 2014
+## Claude port to python September 2026
 ##
 ## Installation
 ## ------------
 ##
-## Clone the git repository, or download the shell script, and then type either:
+## Clone the git repository, or download the script, and then type either:
 ##
 ## .. code-block:: bash
 ##
-##   ./git-ldiff --install [directory]   # directory defaults to $HOME/bin
+##   ./git-lpdf --install [directory]   # directory defaults to $HOME/bin
 ##
 ## or
 ##
 ## .. code-block:: bash
 ##
-##   ./git-ldiff --linkinstall [directory]   # directory defaults to $HOME/bin
+##   ./git-lpdf --linkinstall [directory]   # directory defaults to $HOME/bin
 ##
 ## The first version copies the script to <directory>/git-lpdf and creates a
-## link from <directory>/git-ldiff to <directory>/git-lpdf  The second variation
+## link from <directory>/git-ldiff to <directory>/git-lpdf. The second variation
 ## creates two links to the script in its current location, which is useful if
 ## you have cloned the git repository for git-lpdf.
 ##
-## The script makes use of the background_ package and latexdiff_. Both of these
-## packages are available from ctan_ and they are automatically installed with TeXLive.
+## The script makes use of the background_ package, latexmk_ and latexdiff_.
+## All three are available from ctan_ and are installed automatically with
+## TeXLive.
 
-# defaults
-cleaning="yes"
-banner=""
-debugging="no"
-keep_latex="no"
-latex="pdflatex -interaction=nonstopmode"
-latex_opt=""
-open="open"   # sensible default only on macosx
-old_commit=""
-new_commit=""
-header=""
-tex_file=""
-latexdiff_type="CULINECHBAR"
-ldiff_options=" --flatten --ignore-warnings --packages=amsmath,hyperref --subtype=COLOR "
-if [[ -r $HOME/.latexdiffrc ]]; then
-  ldiff_options="${ldiff_options} -c $HOME/.latexdiffrc"
-fi
+from __future__ import annotations
 
-function exit_with_error()
-{
-  echo "$prog error: $*"
-  exit 1
+import argparse
+import io
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import textwrap
+import time
+from pathlib import Path
+
+WORKING_COPY = "--"  # pseudo-commit meaning "the current working tree"
+DEFAULT_ADD_COLOUR = "0.13,0.545,0.13"  # ForestGreen, as an rgb triple
+
+
+class GitLPDFError(Exception):
+    """Any error that should stop the script with a tidy message."""
+
+
+# ---------------------------------------------------------------------------
+# running external commands
+# ---------------------------------------------------------------------------
+
+verbose = False
+
+
+def debug(*args):
+    if verbose:
+        print("[{}]".format(prog_name()), *args, file=sys.stderr)
+
+
+def run(command, cwd=None, capture=True, check=True, env=None, stdout=None):
+    r"""Run `command`, returning its stripped standard output.
+
+    Commands are always passed as a list so that file names containing spaces,
+    quotes and other awkward characters are handled correctly.
+    """
+    debug("running:", " ".join(str(c) for c in command))
+    try:
+        result = subprocess.run(
+            [str(c) for c in command],
+            cwd=str(cwd) if cwd else None,
+            stdout=stdout
+            if stdout is not None
+            else (subprocess.PIPE if capture else None),
+            stderr=subprocess.PIPE if capture else None,
+            env=env,
+        )
+    except FileNotFoundError:
+        raise GitLPDFError(
+            f"{command[0]} not found -- is it installed and on your PATH?"
+        )
+    if check and result.returncode != 0:
+        message = (result.stderr or b"").decode("utf-8", "replace").strip()
+        raise GitLPDFError(f"{command[0]} failed: {message or result.returncode}")
+    if stdout is not None or not capture:
+        return result
+    return result.stdout.decode("utf-8", "replace").strip()
+
+
+def git(*args, cwd=None, **kwargs):
+    return run(["git"] + list(args), cwd=cwd, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# the repository
+# ---------------------------------------------------------------------------
+
+
+class Repository:
+    r"""The git repository that we are working in.
+
+    Every path that the script passes around is stored *relative to the root of
+    the repository*. This is the single most important invariant in the script:
+    ``git ls-files`` reports paths relative to the current directory whereas
+    ``git archive`` writes them relative to the repository root, and mixing the
+    two is what stopped the original script from working inside subdirectories.
+    """
+
+    def __init__(self):
+        try:
+            root = git("rev-parse", "--show-toplevel")
+        except GitLPDFError:
+            raise GitLPDFError("not inside a git repository?")
+        self.root = Path(root).resolve()
+        # where we were invoked from, relative to the root ('' at the top)
+        self.prefix = git("rev-parse", "--show-prefix")
+
+    def tracked_files(self) -> list[Path]:
+        """All files tracked by the repository, relative to its root."""
+        out = git("-C", self.root, "ls-files", "-z")
+        return [Path(name) for name in out.split("\0") if name]
+
+    def is_commit(self, rev: str) -> bool:
+        try:
+            git(
+                "-C", self.root, "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"
+            )
+            return True
+        except GitLPDFError:
+            return False
+
+    def describe(self, rev: str) -> str:
+        """A one line description of `rev` for use in the banner."""
+        if rev == WORKING_COPY:
+            return time.strftime("Latest version: %a %d %b %Y")
+        return git(
+            "-C",
+            self.root,
+            "log",
+            "--pretty=format:%ad, %s, %h",
+            "--date=local",
+            "-n",
+            "1",
+            rev,
+        )
+
+    def relative(self, path) -> Path:
+        """Convert `path`, as typed by the user, into a repository relative path."""
+        full = Path(path).expanduser()
+        if not full.is_absolute():
+            full = Path.cwd() / full
+        full = Path(os.path.normpath(full))
+        try:
+            return full.relative_to(self.root)
+        except ValueError:
+            raise GitLPDFError(f"{path} is not inside the repository {self.root}")
+
+
+# ---------------------------------------------------------------------------
+# extracting the files for a commit, a directory or the working tree
+# ---------------------------------------------------------------------------
+
+
+def materialise(repo: Repository, source: str, destination: Path) -> None:
+    r"""Populate `destination` with the repository files for `source`.
+
+    `source` is either ``--`` (the working tree), the name of a directory
+    holding a copy of the repository, or anything that git recognises as a
+    commit. In every case the directory structure of the repository is
+    preserved, which is what allows \input{chapters/one} to work.
+    """
+    destination.mkdir(parents=True, exist_ok=True)
+
+    if source == WORKING_COPY or Path(source).is_dir():
+        top = repo.root if source == WORKING_COPY else Path(source).resolve()
+        what = "working tree" if source == WORKING_COPY else f"directory {top}"
+        debug(f"copying {what} into {destination}")
+        copied = 0
+        for name in repo.tracked_files():
+            origin = top / name
+            if not origin.is_file():
+                debug(f"skipping {name}: not in {what}")
+                continue
+            target = destination / name  # <-- the relative path is kept
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(origin, target)
+            copied += 1
+        if copied == 0:
+            raise GitLPDFError(f"no repository files found in the {what}")
+    else:
+        if not repo.is_commit(source):
+            raise GitLPDFError(f"{source} is neither a commit nor a directory")
+        debug(f"extracting commit {source} into {destination}")
+        archive = run(
+            ["git", "-C", repo.root, "archive", "--format=tar", source],
+            stdout=subprocess.PIPE,
+            capture=False,
+        )
+        with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
+            # the data filter is only available, and only needed, from python 3.12
+            if hasattr(tarfile, "data_filter"):
+                tar.extractall(destination, filter="data")
+            else:
+                tar.extractall(destination)
+
+
+# ---------------------------------------------------------------------------
+# finding the main LaTeX file
+# ---------------------------------------------------------------------------
+
+DOCUMENTCLASS = re.compile(r"^[^%]*\\documentclass", re.MULTILINE)
+
+
+def find_main_tex(repo: Repository) -> Path:
+    r"""Guess the main LaTeX file: the tracked .tex file with a \documentclass.
+
+    The original script used `git ls-files | grep .tex`, which matched any file
+    name containing "tex" -- `context.bib` among them -- and then gave up as
+    soon as the repository held more than one .tex file. Looking for
+    \documentclass instead means that a document split into chapters is
+    identified correctly.
+    """
+    candidates = []
+    for name in repo.tracked_files():
+        if name.suffix != ".tex":
+            continue
+        try:
+            text = (repo.root / name).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if DOCUMENTCLASS.search(text):
+            candidates.append(name)
+
+    if not candidates:
+        raise GitLPDFError("no LaTeX file with a \\documentclass found: use --main")
+    if len(candidates) == 1:
+        return candidates[0]
+
+    # several main files: prefer the ones below the directory we were called from
+    here = [c for c in candidates if repo.prefix and str(c).startswith(repo.prefix)]
+    if len(here) == 1:
+        return here[0]
+
+    found = "\n  ".join(str(c) for c in sorted(here or candidates))
+    raise GitLPDFError(
+        f"several main LaTeX files found, use --main to choose one:\n  {found}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# the banner
+# ---------------------------------------------------------------------------
+
+LATEX_ESCAPES = {
+    "&": r"\&",
+    "%": r"\%",
+    "$": r"\$",
+    "#": r"\#",
+    "_": r"\_",
+    "{": r"\{",
+    "}": r"\}",
+    "~": r"\textasciitilde{}",
+    "^": r"\textasciicircum{}",
+    "\\": r"\textbackslash{}",
+    "<": r"\textless{}",
+    ">": r"\textgreater{}",
+    "|": r"\textbar{}",
 }
 
-# defaults
-case $(basename $0) in
-  *diff*) prog="ldiff" ;;
-  *pdf*)  prog="lpdf" ;;
-  *)      exit_with_error "usage: invalid program name" ;;
-esac
+BEGIN_DOCUMENT = re.compile(
+    r"^(?P<before>[^%]*?)(?P<begin>\\begin\{document\})", re.MULTILINE
+)
 
-top_dir=$(PWD)       # save the current working directory
-tmp_dir="/tmp/$prog" # default temporary directory
 
-# program specific defaults
-case $prog in
-  ldiff)
-    old_commit_default="HEAD"
-    new_commit_default="--"
-    ;;
-  lpdf)
-    old_commit_default="--"
-    new_commit_default=""  # will not be used
-    ;;
-esac
+def latex_quote(text: str) -> str:
+    """Make `text` safe to typeset. Commit messages are full of _ and & and %."""
+    return "".join(LATEX_ESCAPES.get(character, character) for character in text)
 
-ldiff_usage="$(cat << END_USAGE
-Usage: git ldiff [--main file] [--latex latex executable] [OLD] [NEW]
 
-To use this mode you need to have latexdiff_ installed.
+def add_banner(tex_file: Path, content: str) -> None:
+    r"""Print `content` down the left-hand margin of every page of `tex_file`."""
+    banner = (
+        r"\usepackage{background}"
+        r"\backgroundsetup{position={-1,1},anchor=left,angle=90,scale=1.2,"
+        r"pages=all,opacity=1,contents={" + latex_quote(content) + "}}\n"
+    )
 
-The following command line options are supported:
+    text = tex_file.read_text(encoding="utf-8", errors="replace")
+    # only the *first* \begin{document} that is not inside a comment
+    match = BEGIN_DOCUMENT.search(text)
+    if not match:
+        raise GitLPDFError(f"no \\begin{{document}} found in {tex_file.name}")
+    at = match.start("begin")
+    tex_file.write_text(text[:at] + banner + text[at:], encoding="utf-8")
+    debug(f"banner added to {tex_file}: {content}")
 
-  -b|--banner <banner>  : set the banner printed in the left-hand margin
-  -d|--debug            : debug mode
-  -k|--keep             : keep the changes LaTeXZ file
-  -l|--latex            : set latex executable
-     --latex-opt        : commandline options passed to latex
-  -m|--main   <texfile> : set the name of the main latex file
-  -s|--safe             : more robust diff of mathematics by latexdiff
-  -S|--verysafe         : very robust diff of mathematics by latexdiff
-  -t|--tmp              : set temporary directory used during compilation
-  -T|--latexdiff-type   : specify type of diff used by latexdiff
 
-By default the files in the HEAD of the git repository are compared with
-the files in current working directory. Ostensibly, OLD and NEW are git shas
-in the current repository, however, we also allow them to be --, for the files
-in the current working directory, or another directory.
+# ---------------------------------------------------------------------------
+# running LaTeX
+# ---------------------------------------------------------------------------
 
-Examples:
-
-.. code-block:: bash
-
-  > git ldiff   # compare most recent commit with current (uncommited) version
-  > git ldiff --main myfile.tex  # compare most recent commit for myfile  with current version
-  > git ldiff <commit> # compare commit with current verion
-  > git ldiff <dirame> [commit] # compare version in directory <dirname> with specified commit
-
-There are also --safe and --verysafe options that are sometimes more
-successful in getting latexdiff to work.
-END_USAGE
-)"
-
-lpdf_usage="$(cat << END_USAGE
-Usage: git lpdf [--main file] [--latex latex executable] [commit]
-
-Creates a PDF file for the main latex file in the repository with commit
-information printed as a banner down the left hand margin on each page.
-
-The following command line options are supported:
-
-  -b|--banner <banner>  : set the banner printed in the left-hand margin
-  -d|--debug            : debug mode
-  -l|--latex            : set latex executable
-     --latex-opt        : commandline options passed to latex
-  -m|--main   <texfile> : set the name of the main latex file
-
-Examples:
-
-.. code-block:: bash
-
-  > git lpdf           # produces time-stamped "Latest version" of main latex file
-  > git lpdf b675cdf   # produces pdf file for main latex file as of commit b675cdf
-  > git lpdf <directory> [commit] # compare file in given directory with commit
-  > git lpdf --main myfile.tex # produces pdf file for my file as of commit b675cdf
-
-By default the script uses pdflatex. This can be changed using the --latex option:
-
-.. code-block:: bash
-
-  > git lpdf --latex   # produces time-stamped "Latest version" of main latex file
-
-END_USAGE
-)"
-
-# print usage messages, stripping out code-blocks and any repeated (blank) lines
-function usage()
-{
-  case $prog in
-    ldiff) echo "$ldiff_usage" | grep -v code-block | uniq;;
-    lpdf)  echo "$lpdf_usage"  | grep -v code-block | uniq;;
-  esac
+LATEXMK_ENGINE = {
+    "pdflatex": "-pdf",
+    "xelatex": "-pdfxe",
+    "lualatex": "-pdflua",
+    "latex": "-dvi",
 }
 
-# write the README file
-function generate_readme()
-{
-  readme="$(dirname $0)/readme.rst"
-  egrep "^##\s+" $0 | sed -E 's/^##[[:space:]]{0,1}//' > $readme  # macosx specific
-  echo -e "\nUsage for lpdf script\n---------------------" >> $readme
-  echo -e "$lpdf_usage" >> $readme
-  echo -e "\nUsage for ldiff script\n----------------------" >> $readme
-  echo -e "$ldiff_usage" >> $readme
-  cat <<End_of_Links >> $readme
 
-To do
------
- - better handling of latexdiff options
- - clean up the argument parsing
- - improve documentation
+def latex_environment(repo: Repository, source_directory: Path) -> dict:
+    """TEXINPUTS that also looks in the real repository, for local .sty files."""
+    env = dict(os.environ)
+    inputs = env.get("TEXINPUTS", "")
+    if not inputs:
+        inputs = ".:"
+    env["TEXINPUTS"] = f"{inputs}{source_directory}:{repo.root}//:"
+    return env
+
+
+def compile_tex(
+    repo: Repository,
+    tex_file: Path,
+    source_directory: Path,
+    engine: str,
+    engine_options: list[str],
+) -> Path:
+    r"""Compile `tex_file` and return the PDF (or DVI) that it produces.
+
+    LaTeX is always run *in the directory holding the file*, which is what the
+    original script failed to do: it ran `pdflatex chapters/thesis` from the top
+    of the tree so that \input{sections/intro} could not be found and the output
+    was written to the wrong directory.
+    """
+    wanted = tex_file.with_suffix(".dvi" if engine == "latex" else ".pdf")
+    wanted.unlink(missing_ok=True)
+    env = latex_environment(repo, source_directory)
+
+    if shutil.which("latexmk"):
+        # -cd runs latex in the directory of the source file and -f carries on
+        # after errors, since a document with errors often still gives a usable
+        # PDF -- which is exactly what you want when reviewing a diff.
+        command = ["latexmk", "-cd", "-f", "-interaction=nonstopmode"]
+        command.append(LATEXMK_ENGINE.get(engine, "-pdf"))
+        if engine not in LATEXMK_ENGINE:
+            command.append(f"-pdflatex={engine} %O %S")
+        command += engine_options + [tex_file.name]
+        run(command, cwd=tex_file.parent, check=False, capture=not verbose, env=env)
+    else:
+        debug("latexmk not found: falling back to running latex directly")
+        run_latex_by_hand(tex_file, engine, engine_options, env)
+
+    if not wanted.is_file():
+        raise GitLPDFError(
+            f"unable to latex {tex_file.name}: see {tex_file.with_suffix('.log')}"
+        )
+    return wanted
+
+
+def run_latex_by_hand(
+    tex_file: Path, engine: str, engine_options: list[str], env: dict
+) -> None:
+    """Run latex, bibtex and latex again, for installations without latexmk."""
+    directory, job = tex_file.parent, tex_file.stem
+    latex = [engine, "-interaction=nonstopmode"] + engine_options + [tex_file.name]
+
+    run(latex, cwd=directory, check=False, capture=not verbose, env=env)
+    aux = directory / f"{job}.aux"
+    if aux.is_file() and aux.stat().st_size:
+        if r"\bibdata" in aux.read_text(encoding="utf-8", errors="replace"):
+            run(
+                ["bibtex", job],
+                cwd=directory,
+                check=False,
+                capture=not verbose,
+                env=env,
+            )
+            run(latex, cwd=directory, check=False, capture=not verbose, env=env)
+        run(latex, cwd=directory, check=False, capture=not verbose, env=env)
+
+
+# ---------------------------------------------------------------------------
+# lpdf: a PDF of one commit
+# ---------------------------------------------------------------------------
+
+
+def lpdf(options, repo: Repository, tex: Path, tmp: Path) -> Path:
+    materialise(repo, options.old, tmp)
+
+    tex_file = tmp / tex
+    if not tex_file.is_file():
+        raise GitLPDFError(f"{tex} does not exist in {options.old}")
+
+    add_banner(tex_file, options.banner or repo.describe(options.old))
+    output = compile_tex(
+        repo, tex_file, repo.root / tex.parent, options.latex, options.latex_opt
+    )
+
+    tag = "latest" if options.old == WORKING_COPY else options.old
+    return deliver(options, repo, output, tex, f"{sanitise(tag)}-{tex.stem}")
+
+
+# ---------------------------------------------------------------------------
+# ldiff: a PDF of the differences between two commits
+# ---------------------------------------------------------------------------
+
+
+def ldiff(options, repo: Repository, tex: Path, tmp: Path) -> Path:
+    if options.old == options.new:
+        raise GitLPDFError(
+            f"{options.old} and {options.new} are the same, nothing to compare"
+        )
+
+    materialise(repo, options.old, tmp / "old")
+    materialise(repo, options.new, tmp / "new")
+
+    old_tex, new_tex = tmp / "old" / tex, tmp / "new" / tex
+    for name, path in (("old", old_tex), ("new", new_tex)):
+        if not path.is_file():
+            raise GitLPDFError(f"{tex} does not exist in the {name} version")
+
+    # Write the diff beside the new version of the file so that \includegraphics
+    # and any other relative paths still resolve. latexdiff --flatten inlines
+    # \input files relative to each main file, so running it from `tmp` is fine.
+    diff_tex = new_tex.with_name(f"{tex.stem}-changes.tex")
+    diff = run(
+        ["latexdiff"]
+        + options.ldiff_options
+        + [f"--type={options.latexdiff_type}", old_tex, new_tex],
+        cwd=tmp,
+    )
+    diff_tex.write_text(
+        recolour(diff.replace("\r", ""), options.add_colour), encoding="utf-8"
+    )
+
+    banner = options.banner or (
+        f"LaTeX diff: {describe(repo, options.old)} -> {describe(repo, options.new)}"
+    )
+    add_banner(diff_tex, banner)
+    output = compile_tex(
+        repo, diff_tex, repo.root / tex.parent, options.latex, options.latex_opt
+    )
+
+    if options.keep:
+        keep = (repo.root / tex).with_name(diff_tex.name)
+        shutil.copy2(diff_tex, keep)
+        print(f"LaTeX diff written to {display(keep)}")
+
+    return deliver(options, repo, output, tex, f"{tex.stem}-changes")
+
+
+def describe(repo: Repository, rev: str) -> str:
+    """A short description of a version, for the ldiff banner."""
+    if rev == WORKING_COPY:
+        return time.strftime("working copy (%a %d %b %Y)")
+    if Path(rev).is_dir():
+        return str(rev)
+    return git(
+        "-C",
+        repo.root,
+        "log",
+        "--pretty=format:%h (%ad)",
+        "--date=short",
+        "-n",
+        "1",
+        rev,
+    )
+
+
+BLUE = re.compile(r"\\color\{blue\}(?=.*%DIF PREAMBLE)")
+DEFINE_COLOURS = re.compile(r"(\\definecolor\{BLUE\}[^\n]*%DIF PREAMBLE)")
+
+
+def recolour(diff: str, rgb: str) -> str:
+    r"""Typeset added text in green rather than blue.
+
+    latexdiff loads the `color` package, which does not know the dvips colour
+    names, so the colour has to be defined before it can be used -- the original
+    script substituted \color{ForestGreen} into a document that had never heard
+    of ForestGreen.
+    """
+    if not rgb:
+        return diff
+    diff = DEFINE_COLOURS.sub(
+        r"\1\n\\definecolor{DIFadd}{rgb}{" + rgb + "} %DIF PREAMBLE", diff, count=1
+    )
+    return BLUE.sub(r"\\color{DIFadd}", diff)
+
+
+# ---------------------------------------------------------------------------
+# delivering the finished PDF
+# ---------------------------------------------------------------------------
+
+
+def sanitise(name: str) -> str:
+    """Make a commit name safe to use in a file name: branches may contain /."""
+    return re.sub(r"[^-\w.]", "-", name.replace("/", "-"))
+
+
+def display(path: Path) -> str:
+    """Show `path` relative to the current directory when that is shorter."""
+    try:
+        return str(path.relative_to(Path.cwd()))
+    except ValueError:
+        return str(path)
+
+
+def deliver(options, repo: Repository, output: Path, tex: Path, stem: str) -> Path:
+    """Copy the finished PDF out of the temporary directory and open it."""
+    if options.output:
+        destination = Path(options.output).expanduser().resolve()
+        if destination.is_dir():
+            destination = destination / (stem + output.suffix)
+    else:
+        # beside the LaTeX file it was built from, wherever that lives
+        destination = (repo.root / tex).with_name(stem + output.suffix)
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(output, destination)
+    print(f"{display(destination)} created")
+
+    if options.open:
+        run([options.open, destination], check=False, capture=True)
+    return destination
+
+
+# ---------------------------------------------------------------------------
+# installation and documentation
+# ---------------------------------------------------------------------------
+
+
+def install(location: str | None, link: bool) -> None:
+    where = Path(location).expanduser() if location else Path.home() / "bin"
+    if not where.is_dir():
+        raise GitLPDFError(f"{where} is not a directory")
+    me = Path(__file__).resolve()
+
+    lpdf_link, ldiff_link = where / "git-lpdf", where / "git-ldiff"
+    for target in (lpdf_link, ldiff_link):
+        if target.exists() or target.is_symlink():
+            target.unlink()
+    if link:
+        lpdf_link.symlink_to(me)
+        print(f"{lpdf_link} -> {me}")
+    else:
+        shutil.copy2(me, lpdf_link)
+        lpdf_link.chmod(0o755)
+        print(f"{me} copied to {lpdf_link}")
+    ldiff_link.symlink_to(lpdf_link if not link else me)
+    print(f"{ldiff_link} -> {lpdf_link if not link else me}")
+
+
+def generate_readme() -> None:
+    """Rebuild readme.rst from the ## comments at the top of this file."""
+    me = Path(__file__).resolve()
+    readme = me.parent / "readme.rst"
+    header = [
+        re.sub(r"^##[ ]?", "", line)
+        for line in me.read_text(encoding="utf-8").splitlines()
+        if line.startswith("##")
+    ]
+
+    with readme.open("w", encoding="utf-8") as out:
+        out.write("\n".join(header))
+        for mode in ("lpdf", "ldiff"):
+            title = f"Usage for the {mode} script"
+            out.write(f"\n\n{title}\n{'-' * len(title)}\n\n::\n\n")
+            usage = parser(mode).format_help()
+            out.write("\n".join("  " + line for line in usage.splitlines()))
+        out.write(LINKS.format(date=time.strftime("%d %B %Y")))
+    print(f"{readme} written")
+
+
+LINKS = """
 
 Licence
 -------
@@ -218,337 +634,244 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 
-Automatically generated $(date).
+Automatically generated {date}.
 
 .. References
 .. ..........
 .. _background: http://www.ctan.org/pkg/background
 .. _ctan: http://www.ctan.org/
-.. _git-latexdiff: https://gitorious.org/git-latexdiff
+.. _git-latexdiff: https://github.com/git-latexdiff/git-latexdiff
 .. _latexdiff: http://www.ctan.org/pkg/latexdiff
+.. _latexmk: http://www.ctan.org/pkg/latexmk
 .. _GPL: http://www.gnu.org/licenses/gpl.html
-End_of_Links
-}
+"""
 
-# extract_git_files sha tmp
-function extract_git_files
-{
-  sha="$1"   # sha identifying a commit -- or a directory
-  # subdirectory of  $tmp_dir to put the files in
-  if [[ $# -eq 2 ]]; then
-    tmp="$tmp_dir/$2"
-  else
-    tmp="$tmp_dir"
-  fi
-  mkdir -p $tmp
-  if [[ "$sha" = "--" ]]; then
-    # $target_dir to $top_dir
-    for f in $tracked_files; do
-      /bin/cp -f "$top_dir/$f" "$tmp/"
-    done
-  elif [[ -d "$sha" ]]; then
-    # $target_dir to $top_dir
-    for f in $tracked_files; do
-        /bin/cp -f $sha/"$f" "$tmp/"
-    done
-  else
-    # extract files git archive into $tmp
-    cd "$git_dir" || exit_with_error "unable to cd to git directory $git_dir"
-    if [[ $# -eq 2 ]]; then
-      mkdir -p $tmp || exit_with_error "unable to create directory $tmp"
-    fi
-    git archive --format=tar "$sha" | tar -xC $tmp -f - || exit_with_error "unable to extract files from $sha"
-  fi
-}
 
-# add a banner down the left-hand margin on each page of the tex file
-# usage: add_banner_to_TeX_file<filename> <banner>
-function add_banner_to_TeX_file()
-{
-  if [[ -z $banner ]] ; then
-    content=$2
-  else
-    content=$banner
-  fi
-  banner="usepackage{background}\\\\backgroundsetup{position={-1,1},anchor=left,angle=90,scale=1.2,pages=all,opacity=1,contents={$content}}\\\\"
-  sed -i.bak  "s@begin{document}@${banner}&@" "$1"
-}
+# ---------------------------------------------------------------------------
+# the command line
+# ---------------------------------------------------------------------------
 
-# latex TeX file as many times as necessary
-# usage: latex_file <dir> <file>
-function latex_file()
-{
-  cd "$1"
-  file="${2%.*}"    # remove the extension from the filename
 
-  # add $top_dir to TEXINPUTS
-  if [[ -z "$TEXINPUTS" ]] ; then
-    TEXINPUTS=".:${top_dir}/:"
-  else
-    TEXINPUTS="${TEXINPUTS}${top_dir}/:"
-  fi
+def prog_name() -> str:
+    """lpdf or ldiff, depending on the name that the script was invoked under."""
+    called = Path(sys.argv[0]).name
+    if "diff" in called:
+        return "ldiff"
+    return "lpdf"
 
-  $latex "$latex_opt" $file
 
-  case $latex in    # test for the correct extension (pdf or dvi or ?)
-    *pdf*) ext="pdf" ;;
-    *)     ext="dvi" ;;
-  esac
+LPDF_EPILOG = """examples:
+  git lpdf                     PDF of the current working copy, date stamped
+  git lpdf b675cdf             PDF of the main LaTeX file as of commit b675cdf
+  git lpdf --main paper/ms.tex HEAD~3
+  git lpdf <directory>         PDF of the copy of the repository in <directory>
+"""
 
-  if [[ -z $file.$ext || ! -r $file.$ext ]] ; then
-    # To check for errors, rather than looking at the exit code from latex we
-    # check to see if a PDF/dvi files has been created because quite often there
-    # are errors in the latex file but we still get a reasonable PDF file.
-    # After the first pass we assume that latex-ing is OK
-    exit_with_error "unable to latex $file"
-  fi
+LDIFF_EPILOG = """examples:
+  git ldiff                    compare the last commit with the working copy
+  git ldiff <commit>           compare <commit> with the working copy
+  git ldiff <commit1> <commit2>
+  git ldiff <directory> HEAD   compare a copy of the repository with HEAD
 
-  # if there is an aux file assume we need to update cross-references
-  if [[ -s $file.aux ]]; then
-    # run bibtex, and re-latex, if there is a \bibdata command in the aux file
-    needs_bibtex=$(grep '\\bibdata' $file.aux)
-    if [[ -n $needs_bibtex ]]; then
-      bibtex $file  # generate bibliography
-      $latex $file  # need an extra run of latex
-    fi
-    $latex $file    # to update cross-references
-  fi
-}
+OLD and NEW are commits, or `--` for the working copy, or a directory holding
+a copy of the repository. If latexdiff struggles with your mathematics then try
+the --safe and --verysafe options.
+"""
 
-function ldiff()
-{
-  # if we have the same git sha1's then there's nothing to do
-  [[ "$old_commit" = "$new_commit" ]] && exit_with_error "You are comparing same the sha1's!"
 
-  # extract the archived files
-  extract_git_files $old_commit old  # copy to /tmp/old
-  extract_git_files $new_commit new  # copy to /tmp/new
+def parser(mode: str) -> argparse.ArgumentParser:
+    diffing = mode == "ldiff"
+    argue = argparse.ArgumentParser(
+        prog=f"git {mode}",
+        description=textwrap.fill(
+            "Produce a PDF showing the differences between two versions of a LaTeX "
+            "document in a git repository, with the versions being compared printed "
+            "down the margin of every page."
+            if diffing
+            else "Produce a PDF of a LaTeX document in a git repository, with the commit "
+            "information printed down the margin of every page.",
+            width=78,
+        ),
+        epilog=LDIFF_EPILOG if diffing else LPDF_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    add = argue.add_argument
 
-  # now create the latexdiff file
-  cd $tmp_dir
-  [[ -r "old/$tex_file" ]] || exit_with_error "old/$tex_file does not exist"
-  [[ -r "new/$tex_file" ]] || exit_with_error "new/$tex_file does not exist"
-  latexdiff $ldiff_options --type=$latexdiff_type "old/$tex_file" "new/$tex_file" | sed 's@@@g' > "$tex_file"
+    if diffing:
+        add(
+            "old",
+            nargs="?",
+            default="HEAD",
+            metavar="OLD",
+            help="the older version [HEAD]",
+        )
+        add(
+            "new",
+            nargs="?",
+            default=WORKING_COPY,
+            metavar="NEW",
+            help="the newer version [the working copy]",
+        )
+    else:
+        add(
+            "old",
+            nargs="?",
+            default=WORKING_COPY,
+            metavar="COMMIT",
+            help="the commit to typeset [the working copy]",
+        )
 
-  add_banner_to_TeX_file "$tex_file" "$header"
+    add("-b", "--banner", default="", help="the banner printed in the left-hand margin")
+    add("-d", "--debug", action="store_true", help="print what the script is doing")
+    add("-l", "--latex", default="pdflatex", help="the latex executable [pdflatex]")
+    add(
+        "--latex-opt",
+        default=[],
+        action="append",
+        metavar="OPT",
+        help="an option passed to latex, repeatable; options that start with a "
+        "dash need the equals form: --latex-opt=-shell-escape",
+    )
+    add("-m", "--main", metavar="TEXFILE", help="the main latex file")
+    add("-n", "--nocleaning", action="store_true", help="keep the temporary directory")
+    add(
+        "-o",
+        "--open",
+        default=default_viewer(),
+        metavar="COMMAND",
+        help='the command used to open the PDF ("" to not open it)',
+    )
+    add(
+        "--output",
+        metavar="PATH",
+        help="where to write the PDF [beside the latex file]",
+    )
+    add("-t", "--tmp", metavar="DIR", help="the temporary directory used for building")
 
-  # change the blue for added text for ForestGreen
-  sed -E -i.bak 's@\\color{blue}(.*%DIF PREAMBLE)@\\color{ForestGreen}\1@' $tex_file
+    if diffing:
+        add("-k", "--keep", action="store_true", help="keep the latexdiff LaTeX file")
+        add("-s", "--safe", action="store_true", help="more robust diff of mathematics")
+        add(
+            "-S",
+            "--verysafe",
+            action="store_true",
+            help="very robust diff of mathematics",
+        )
+        add(
+            "-T",
+            "--latexdiff-type",
+            default="CULINECHBAR",
+            metavar="TYPE",
+            help="the type of diff used by latexdiff [CULINECHBAR]",
+        )
+        add(
+            "--add-colour",
+            default=DEFAULT_ADD_COLOUR,
+            metavar="RGB",
+            help=f'rgb colour for added text, "" to leave it blue [{DEFAULT_ADD_COLOUR}]',
+        )
 
-  # latex the changes file
-  latex_file $tmp_dir "$tex_file"
+    add(
+        "--install",
+        nargs="?",
+        const="",
+        metavar="DIR",
+        help="install the script into DIR [$HOME/bin]",
+    )
+    add(
+        "--linkinstall",
+        nargs="?",
+        const="",
+        metavar="DIR",
+        help="link to the script from DIR [$HOME/bin]",
+    )
+    add("--readme", action="store_true", help="regenerate readme.rst")
+    return argue
 
-  # finally, if we are cleaning up then move the pdf file to $top_dir and
-  # delete all of the files in $tmp_dir
-  if [[ -r "$pdf_file" && "$cleaning" = "yes" ]]; then
-    pdf_changes="$top_dir/${pdf_file/.pdf/-changes.pdf}"
-    /bin/mv "$tmp_dir/$pdf_file" "$pdf_changes"
-    if [[ $keep_latex = "yes" ]]; then
-        /bin/mv "$tmp_dir/$tex_file" "$top_dir/${tex_file/.tex/-changes.tex}"
-    fi
-    $open "$pdf_changes"
-    /bin/rm -Rf $tmp_dir
-  else
-    [[ -r "$pdf_file" ]] && $open $pdf_file
-  fi
-}
 
-function lpdf()
-{
-  # extract the archived files
-  extract_git_files $old_commit
+def default_viewer() -> str:
+    if sys.platform == "darwin":
+        return "open"
+    if sys.platform.startswith("win"):
+        return "start"
+    return shutil.which("xdg-open") or ""
 
-  # determine banner to specify the commit on each page of the $tex_file
-  if [[ "$old_commit" = "--" ]]; then
-    commit_message=$(date "+Latest version: %a %d %b %Y")
-    old_comment="Latest"
-  else
-    commit_message=$(git log --pretty='format:%ad, %s, %h' --date=local -n 1 $old_commit)
-  fi
 
-  # now create the latexdiff file
-  cd $tmp_dir
-  [[ -r $tex_file ]] || exit_with_error "$tex_file does not exist"
-  add_banner_to_TeX_file "$tex_file" "$commit_message"
+def latexdiff_options(options) -> list[str]:
+    opts = [
+        "--flatten",
+        "--ignore-warnings",
+        "--packages=amsmath,hyperref",
+        "--subtype=COLOR",
+    ]
+    latexdiffrc = Path.home() / ".latexdiffrc"
+    if latexdiffrc.is_file():
+        opts += ["-c", str(latexdiffrc)]
+    if options.verysafe:
+        opts.append("--math-markup=off")
+    elif options.safe:
+        opts.append("--math-markup=whole")
+    return opts
 
-  latex_file $tmp_dir "$tex_file"
 
-  # finally, if we are cleaning up then move the pdf file to $top_dir and
-  # delete all of the files in $tmp_dir
-  if [[ ! -r $pdf_file ]]; then
-    echo "No pdf file produced"
-  elif [[ $cleaning = "yes" ]]; then
-    /bin/mv "$tmp_dir/$pdf_file" "$top_dir/${old_commit}-$pdf_file"
-    $open -n "$top_dir/${old_commit}-$pdf_file"
-    /bin/rm -Rf $tmp_dir
-  else
-    $open "$tmp_dir/$pdf_file"
-  fi
-}
+def main() -> int:
+    global verbose
+    mode = prog_name()
+    options = parser(mode).parse_args()
+    verbose = options.debug
 
-# first determine if we are in a git repository and, if so, where the repository is
-git_dir="$(git rev-parse --show-toplevel)/.git"
-[[ ! -d "$git_dir" ]] && exit_with_error "not in a git repository?"
+    try:
+        if options.install is not None:
+            install(options.install or None, link=False)
+            return 0
+        if options.linkinstall is not None:
+            install(options.linkinstall or None, link=True)
+            return 0
+        if options.readme:
+            generate_readme()
+            return 0
 
-# parse command line arguments
-while [[ $# -ne 0 ]]; do
-  case $1 in
-    -h|--help) usage && exit ;;
-    --banner|-b)
-      shift
-      [[ $# -eq 0 ]] && exit_with_error "--banner requires an argument"
-      banner="$1" && shift
-      ;;
-    --main|-m)
-      shift
-      [[ $# -eq 0 ]] && exit_with_error "--main requires an argument"
-      tex_file="$1" && shift
-      ;;
-    --latex|-l)
-      shift
-      [[ $# -eq 0 ]] && exit_with_error "--latex requires an argument"
-      latex="$1" && shift
-      text ! -x $latex && exit_with_error "latex executable $latex not executable"
-      ;;
-    --latex-opt)
-      shift
-      [[ $# -eq 0 ]] && exit_with_error "--latex requires an argument"
-      latex_opt="$1" && shift
-      ;;
-    --tmp_dir|-t)
-      shift
-      [[ $# -eq 0 ]] && exit_with_error "--tmp requires an argument"
-      tmp_dir="$1" && shift
-      [[ "$tmp_dir" = "job" ]] && tmp_dir="/tmp/latexdiff-$$"
-      ;;
-    --open|-o)
-      shift
-      [[ $# -eq 0 ]] && exit_with_error "--open requires an argument"
-      open="$1" && shift
-      ;;
-    --nocleaning|-n)
-      cleaning="no"
-      shift
-      ;;
-    --debug*|-d)
-      set -vx  # turn on inbuilt debugging
-      debugging="yes"
-      cleaning="no"
-      shift
-      ;;
-    --keep|-k)
-      keep_latex="yes"
-      shift
-      ;;
-    --latexdiff-type|-T)
-      shift
-      latexdiff_type="$1" && shift
-      ;;
-    --safe|-s)
-      # add extra options to ldiff_options so that latexdiff has a better chance of working
-      ldiff_options="$ldiff_options --math-markup=whole"
-      shift
-      ;;
-    --verysafe|-S)
-      # add extra options to ldiff_options so that latexdiff has an even better chance of working
-      ldiff_options="$ldiff_options --math-markup=off"
-      shift
-      ;;
-    --install)
-      if [[ $# -gt 1 ]]; then
-        shift
-        location=$1
-      else
-        location=$HOME/bin
-        [[ ! -d $location ]] && exit_with_error "--install <dir>: dir must be a directory"
-      fi
-      cp $0 $location/git-lpdf
-      ln -s $location/git-lpdf $location/git-ldiff
-      exit 0
-      ;;
-   --linkinstall)
-      if [[ $# -gt 1 ]]; then
-        shift
-        location=$1
-      else
-        location=$HOME/bin
-        [[ ! -d $location ]] && exit_with_error "--linkinstall <dir>: dir must be a directory"
-      fi
-      case $(dirname $0) in
-        \.) me="$(pwd)/$(basename $0)" ;;
-         *) me=$0 ;;
-      esac
-      echo "Linking to $me"
-      [[ $0 != $location/git-lpdf ]] && ln -s $me $location/git-lpdf
-      ln -s $me $location/git-ldiff
-      exit 0
-      ;;
-    --readme)
-      generate_readme
-      exit 0
-      ;;
-    *)
-      if [[ -z $old_commit ]]; then
-        old_commit="$1"
-      elif [[ -z $new_commit ]] ; then
-        new_commit="$1"
-      else
-        usage && exit 1
-      fi
-      shift
-      ;;
-  esac
-done
+        repo = Repository()
+        tex = repo.relative(options.main) if options.main else find_main_tex(repo)
+        if (
+            options.main
+            and not (repo.root / tex).is_file()
+            and options.old == WORKING_COPY
+        ):
+            raise GitLPDFError(f"unable to read {options.main}")
+        debug(f"repository {repo.root}, main file {tex}")
 
-[[ -z $old_commit ]] && old_commit=$old_commit_default
-[[ -z $new_commit ]] && new_commit=$new_commit_default
+        if mode == "ldiff":
+            options.ldiff_options = latexdiff_options(options)
 
-# by default the changes header lists the two diffs
-if [[ "$changes" ]] ; then
-  changes="\\\\LaTeX diff:  $old_commit \\\\quad$\\\\leftrightarrow$\\\\quad $new_commit"
-fi
+        keep_tmp = options.nocleaning or options.debug
+        tmp = (
+            Path(options.tmp).expanduser().resolve()
+            if options.tmp
+            else Path(tempfile.mkdtemp(prefix=f"git-{mode}-"))
+        )
+        tmp.mkdir(parents=True, exist_ok=True)
+        debug(f"building in {tmp}")
 
-# If the tex_file has not been specified we try to guess it and exit if the
-# repository contains more than one tex file with a \documentclass commend..
-if [[ -z "$tex_file" ]] ; then
-  tex_file="$(git ls-files | grep .tex)"
-  [[ ! -r "$tex_file" ]] && exit_with_error "Tex file <$tex_file> is ambiguous. Specify filename using --main (found $tex_file)"
-elif [[ ! -r "$tex_file" ]]; then
-  exit_with_error "Unable to read file $tex_file"
-fi
-pdf_file=${tex_file/.tex/.pdf}
+        try:
+            (ldiff if mode == "ldiff" else lpdf)(options, repo, tex, tmp)
+        except GitLPDFError:
+            # leave the build directory behind so that the log file mentioned
+            # in the error message can actually be read
+            keep_tmp = True
+            raise
+        finally:
+            if keep_tmp or options.tmp:
+                print(f"build files left in {tmp}")
+            else:
+                shutil.rmtree(tmp, ignore_errors=True)
+    except GitLPDFError as error:
+        print(f"git {mode}: {error}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 130
+    return 0
 
-# create a string of tracked files in the git repository
-if [[ $(git ls-files | wc -l) -gt 1 ]]; then
-  tracked_files="$(git ls-files|xargs)"
-else
-  tracked_files="$(git ls-files)"
-fi
 
-# if using the default tmp directory then delete it otherwise try to create it.
-[[ $tmp_dir = "/tmp/$prog" ]] && /bin/rm -Rf /tmp/$prog
-if [[ ! -d "$tmp_dir" ]] ; then
-  mkdir -p $tmp_dir || exit_with_error "unable to create temporary directory $tmp_dir"
-fi
-
-# print debugging information if requested
-if [[ $debugging = "yes" ]]; then
-  cat << debugging
-$prog should be finishing:
-  top_dir:    $top_dir
-  tmp_dir:    $tmp_dir
-  tex_file:   $tex_file
-  pdf_file:   $pdf_file
-  cleaning:   $cleaning
-  old commit: $old_commit
-  new commit: $new_commit
-debugging
-fi
-
-# fork to comparing two commits with latexdiff or pdf-ing one commit
-case $prog in
-  ldiff) ldiff
-    ;;
-  lpdf)  lpdf
-    ;;
-esac
+if __name__ == "__main__":
+    sys.exit(main())

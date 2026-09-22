@@ -1,116 +1,166 @@
 ======================
 git-lpdf and git-ldiff
 ======================
- 
-A bash script for producing pdf files from a git repository that tracks latex
-documents. There are two modes:
-- lpdf:  produces a latex file for the given commit in the repository
-- ldiff: uses latexdiff to create a pdf file that highlights the differences between commits
-This script is partially motivated by the script git-latexdiff_ and my
-attempts to get it to work the way that I wanted. The date and commit information is printed 
-as a banner on the PDF files. This script should be used from inside git.
-  
+
+A python script for producing PDF files from a git repository that tracks
+LaTeX documents. There are two modes:
+
+- lpdf:  produces a PDF file for a given commit in the repository
+- ldiff: uses latexdiff to produce a PDF that highlights the differences
+  between two commits
+
+In both cases the commit information is printed as a banner down the
+left-hand margin of every page of the PDF. This script is partially
+motivated by the script git-latexdiff_ and my attempts to get it to work the
+way that I wanted. The script should be used from inside a git repository.
+
 The main idea of the script is to provide an easy way to produce a PDF file
 from a git repository that is clearly annotated with the commit data. For
-example.
- 
+example,
+
 .. code-block:: bash
- 
+
    > git lpdf <commit>
- 
-will produce a PDF file for the commit <commit> of the latex file in the current
-repository. Using latexdiff_, the command
- 
+
+produces a PDF file for the commit <commit> of the main LaTeX file in the
+current repository. Using latexdiff_, the command
+
 .. code-block:: bash
- 
+
    > git ldiff <commit>
- 
+
 produces a PDF file that highlights the differences between the commit
-<commit> and the current ## working copy of the latex file in the current
-repository. Similarly,
- 
+<commit> and the current working copy, and
+
 .. code-block:: bash
- 
-   > git ldiff <commit1> <commit1>
- 
-produces a PDf file showing he differences between two commits.
-  
-In all cases the commit information is printed on all pages of the PDF.
-  
+
+   > git ldiff <commit1> <commit2>
+
+produces a PDF file showing the differences between two commits.
+
+Unlike the original bash implementation, LaTeX documents that are spread
+over several directories are fully supported: the directory structure of the
+repository is preserved when the files are extracted and LaTeX is run in the
+directory containing the main file, so that relative \input and
+\includegraphics paths resolve correctly.
+
 Andrew Mathas June 2014
-  
+
 Installation
 ------------
-  
-Clone the git repository, or download the shell script, and then type either:
- 
+
+Clone the git repository, or download the script, and then type either:
+
 .. code-block:: bash
- 
-  ./git-ldiff --install [directory]   # directory defaults to $HOME/bin
- 
-or 
- 
+
+  ./git-lpdf --install [directory]   # directory defaults to $HOME/bin
+
+or
+
 .. code-block:: bash
- 
-  ./git-ldiff --linkinstall [directory]   # directory defaults to $HOME/bin
- 
+
+  ./git-lpdf --linkinstall [directory]   # directory defaults to $HOME/bin
+
 The first version copies the script to <directory>/git-lpdf and creates a
-link from <directory>/git-ldiff to <directory>/git-lpdf  The second variation
+link from <directory>/git-ldiff to <directory>/git-lpdf. The second variation
 creates two links to the script in its current location, which is useful if
 you have cloned the git repository for git-lpdf.
+
+The script makes use of the background_ package, latexmk_ and latexdiff_.
+All three are available from ctan_ and are installed automatically with
+TeXLive.
+
+Usage for the lpdf script
+-------------------------
+
+::
+
+  usage: git lpdf [-h] [-b BANNER] [-d] [-l LATEX] [--latex-opt OPT]
+                  [-m TEXFILE] [-n] [-o COMMAND] [--output PATH] [-t DIR]
+                  [--install [DIR]] [--linkinstall [DIR]] [--readme]
+                  [COMMIT]
   
-The script makes use of the background_ package and latexdiff_. Both of these
-packages are available from ctan_ and they are automatically installed with TeXLive.
+  Produce a PDF of a LaTeX document in a git repository, with the commit
+  information printed down the margin of every page.
+  
+  positional arguments:
+    COMMIT               the commit to typeset [the working copy]
+  
+  options:
+    -h, --help           show this help message and exit
+    -b, --banner BANNER  the banner printed in the left-hand margin
+    -d, --debug          print what the script is doing
+    -l, --latex LATEX    the latex executable [pdflatex]
+    --latex-opt OPT      an option passed to latex, repeatable; options that
+                         start with a dash need the equals form: --latex-
+                         opt=-shell-escape
+    -m, --main TEXFILE   the main latex file
+    -n, --nocleaning     keep the temporary directory
+    -o, --open COMMAND   the command used to open the PDF ("" to not open it)
+    --output PATH        where to write the PDF [beside the latex file]
+    -t, --tmp DIR        the temporary directory used for building
+    --install [DIR]      install the script into DIR [$HOME/bin]
+    --linkinstall [DIR]  link to the script from DIR [$HOME/bin]
+    --readme             regenerate readme.rst
+  
+  examples:
+    git lpdf                     PDF of the current working copy, date stamped
+    git lpdf b675cdf             PDF of the main LaTeX file as of commit b675cdf
+    git lpdf --main paper/ms.tex HEAD~3
+    git lpdf <directory>         PDF of the copy of the repository in <directory>
 
-Usage for lpdf script
----------------------
-Usage: git lpdf [--main file] [--latex latex executable] [commit]
+Usage for the ldiff script
+--------------------------
 
-Creates a PDF file for the main latex file in the repository with commit
-information printed as a banner down the left hand margin on each page.
+::
 
-Examples:
-
-.. code-block:: bash
-
-  > git lpdf           # produces time-stamped "Latest version" of main latex file
-  > git lpdf b675cdf   # produces pdf file for main latex file as of commit b675cdf
-  > git lpdf --main myfile.tex # produces pdf file for my file as of commit b675cdf
-
-By default the script uses pdflatex. This can be changed using the --latex option:
-
-.. code-block:: bash
-
-  > git lpdf --latex   # produces time-stamped "Latest version" of main latex file
-
-Usage for ldiff script
-----------------------
-Usage: git ldiff [--main file] [--latex latex executable] [OLD] [NEW]
-
-To use this mode you need to have latexdiff_ installed.
-
-By default the files in the HEAD of the git repository are compared with
-the files in current working directory. Ostensibly, OLD and NEW are git shas
-in the current repository, however, we also allow them to be --, for the files
-in the current working directory, or another directory.
-
-Examples:
-
-.. code-block:: bash
-
-  > git ldiff   # compare most recent commit with current (uncommited) version
-  > git ldiff --main myfile.tex  # compare most recent commit for myfile  with current version
-  > git ldiff <commit> # compare commit with current verion
-  > git ldiff <dirame> [commit] # compare version in directory <dirname> with specified commit
-
-There are also --safe and --verysafe options that are sometimes more
-successful in getting latexdiff to work.
-
-To do
------
- - better handling of latexdiff options
- - clean up the argument parsing
- - improve documentation 
+  usage: git ldiff [-h] [-b BANNER] [-d] [-l LATEX] [--latex-opt OPT]
+                   [-m TEXFILE] [-n] [-o COMMAND] [--output PATH] [-t DIR] [-k]
+                   [-s] [-S] [-T TYPE] [--add-colour RGB] [--install [DIR]]
+                   [--linkinstall [DIR]] [--readme]
+                   [OLD] [NEW]
+  
+  Produce a PDF showing the differences between two versions of a LaTeX document
+  in a git repository, with the versions being compared printed down the margin
+  of every page.
+  
+  positional arguments:
+    OLD                   the older version [HEAD]
+    NEW                   the newer version [the working copy]
+  
+  options:
+    -h, --help            show this help message and exit
+    -b, --banner BANNER   the banner printed in the left-hand margin
+    -d, --debug           print what the script is doing
+    -l, --latex LATEX     the latex executable [pdflatex]
+    --latex-opt OPT       an option passed to latex, repeatable; options that
+                          start with a dash need the equals form: --latex-
+                          opt=-shell-escape
+    -m, --main TEXFILE    the main latex file
+    -n, --nocleaning      keep the temporary directory
+    -o, --open COMMAND    the command used to open the PDF ("" to not open it)
+    --output PATH         where to write the PDF [beside the latex file]
+    -t, --tmp DIR         the temporary directory used for building
+    -k, --keep            keep the latexdiff LaTeX file
+    -s, --safe            more robust diff of mathematics
+    -S, --verysafe        very robust diff of mathematics
+    -T, --latexdiff-type TYPE
+                          the type of diff used by latexdiff [CULINECHBAR]
+    --add-colour RGB      rgb colour for added text, "" to leave it blue
+                          [0.13,0.545,0.13]
+    --install [DIR]       install the script into DIR [$HOME/bin]
+    --linkinstall [DIR]   link to the script from DIR [$HOME/bin]
+    --readme              regenerate readme.rst
+  
+  examples:
+    git ldiff                    compare the last commit with the working copy
+    git ldiff <commit>           compare <commit> with the working copy
+    git ldiff <commit1> <commit2>
+    git ldiff <directory> HEAD   compare a copy of the repository with HEAD
+  
+  OLD and NEW are commits, or `--` for the working copy, or a directory holding
+  a copy of the repository. If latexdiff struggles with your mathematics then try
+  the --safe and --verysafe options.
 
 Licence
 -------
@@ -125,12 +175,13 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 
-Automatically generated Sun 21 Dec 2014 23:37:02 AEDT.
+Automatically generated 22 September 2026.
 
 .. References
 .. ..........
 .. _background: http://www.ctan.org/pkg/background
 .. _ctan: http://www.ctan.org/
-.. _git-latexdiff: https://gitorious.org/git-latexdiff
+.. _git-latexdiff: https://github.com/git-latexdiff/git-latexdiff
 .. _latexdiff: http://www.ctan.org/pkg/latexdiff
+.. _latexmk: http://www.ctan.org/pkg/latexmk
 .. _GPL: http://www.gnu.org/licenses/gpl.html
