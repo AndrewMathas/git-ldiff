@@ -1,13 +1,25 @@
 ======================
-git-lpdf and git-ldiff
+git-ldiff and git-lpdf
 ======================
+
+|version| |licence| |released|
+
+.. |version| image:: https://img.shields.io/github/v/tag/AndrewMathas/git-ldiff?color=success&label=git-ldiff
+   :alt: Latest version
+
+.. |licence| image:: https://img.shields.io/badge/licence-GPL--3.0-blue?style=flat-square
+   :alt: GNU General Public License, Version 3, 29 June 2007
+   :target: https://www.gnu.org/licenses/gpl-3.0.html
+
+.. |released| image:: https://img.shields.io/github/release-date/AndrewMathas/git-ldiff?label=released&color=red
+   :alt: Release date
 
 A python script for producing PDF files from a git repository that tracks
 LaTeX documents. There are two modes:
 
-- lpdf:  produces a PDF file for a given commit in the repository
 - ldiff: uses latexdiff to produce a PDF that highlights the differences
   between two commits
+- lpdf:  produces a PDF file for a given commit in the repository
 
 In both cases the commit information is printed as a banner down the
 left-hand margin of every page of the PDF. This script is partially
@@ -16,14 +28,7 @@ way that I wanted. The script should be used from inside a git repository.
 
 The main idea of the script is to provide an easy way to produce a PDF file
 from a git repository that is clearly annotated with the commit data. For
-example,
-
-.. code-block:: bash
-
-   > git lpdf <commit>
-
-produces a PDF file for the commit <commit> of the main LaTeX file in the
-current repository. Using latexdiff_, the command
+example, using latexdiff_, the command
 
 .. code-block:: bash
 
@@ -36,7 +41,14 @@ produces a PDF file that highlights the differences between the commit
 
    > git ldiff <commit1> <commit2>
 
-produces a PDF file showing the differences between two commits.
+produces a PDF file showing the differences between two commits. Similarly,
+
+.. code-block:: bash
+
+   > git lpdf <commit>
+
+produces a PDF file for the commit <commit> of the main LaTeX file in the
+current repository.
 
 Unlike the original bash implementation, LaTeX documents that are spread
 over several directories are fully supported: the directory structure of the
@@ -45,6 +57,7 @@ directory containing the main file, so that relative \input and
 \includegraphics paths resolve correctly.
 
 Andrew Mathas June 2014
+Claude port to python September 2026
 
 Installation
 ------------
@@ -53,61 +66,22 @@ Clone the git repository, or download the script, and then type either:
 
 .. code-block:: bash
 
-  ./git-lpdf --install [directory]   # directory defaults to $HOME/bin
+  ./git-ldiff --install [directory]   # directory defaults to $HOME/bin
 
 or
 
 .. code-block:: bash
 
-  ./git-lpdf --linkinstall [directory]   # directory defaults to $HOME/bin
+  ./git-ldiff --linkinstall [directory]   # directory defaults to $HOME/bin
 
-The first version copies the script to <directory>/git-lpdf and creates a
-link from <directory>/git-ldiff to <directory>/git-lpdf. The second variation
+The first version copies the script to <directory>/git-ldiff and creates a
+link from <directory>/git-lpdf to <directory>/git-ldiff. The second variation
 creates two links to the script in its current location, which is useful if
-you have cloned the git repository for git-lpdf.
+you have cloned the git repository for git-ldiff.
 
 The script makes use of the background_ package, latexmk_ and latexdiff_.
 All three are available from ctan_ and are installed automatically with
 TeXLive.
-
-Usage for the lpdf script
--------------------------
-
-::
-
-  usage: git lpdf [-h] [-b BANNER] [-d] [-l LATEX] [--latex-opt OPT]
-                  [-m TEXFILE] [-n] [-o COMMAND] [--output PATH] [-t DIR]
-                  [--install [DIR]] [--linkinstall [DIR]] [--readme]
-                  [COMMIT]
-  
-  Produce a PDF of a LaTeX document in a git repository, with the commit
-  information printed down the margin of every page.
-  
-  positional arguments:
-    COMMIT               the commit to typeset [the working copy]
-  
-  options:
-    -h, --help           show this help message and exit
-    -b, --banner BANNER  the banner printed in the left-hand margin
-    -d, --debug          print what the script is doing
-    -l, --latex LATEX    the latex executable [pdflatex]
-    --latex-opt OPT      an option passed to latex, repeatable; options that
-                         start with a dash need the equals form: --latex-
-                         opt=-shell-escape
-    -m, --main TEXFILE   the main latex file
-    -n, --nocleaning     keep the temporary directory
-    -o, --open COMMAND   the command used to open the PDF ("" to not open it)
-    --output PATH        where to write the PDF [beside the latex file]
-    -t, --tmp DIR        the temporary directory used for building
-    --install [DIR]      install the script into DIR [$HOME/bin]
-    --linkinstall [DIR]  link to the script from DIR [$HOME/bin]
-    --readme             regenerate readme.rst
-  
-  examples:
-    git lpdf                     PDF of the current working copy, date stamped
-    git lpdf b675cdf             PDF of the main LaTeX file as of commit b675cdf
-    git lpdf --main paper/ms.tex HEAD~3
-    git lpdf <directory>         PDF of the copy of the repository in <directory>
 
 Usage for the ldiff script
 --------------------------
@@ -150,7 +124,7 @@ Usage for the ldiff script
                           [0.13,0.545,0.13]
     --install [DIR]       install the script into DIR [$HOME/bin]
     --linkinstall [DIR]   link to the script from DIR [$HOME/bin]
-    --readme              regenerate readme.rst
+    --readme              regenerate README.rst
   
   examples:
     git ldiff                    compare the last commit with the working copy
@@ -161,6 +135,45 @@ Usage for the ldiff script
   OLD and NEW are commits, or `--` for the working copy, or a directory holding
   a copy of the repository. If latexdiff struggles with your mathematics then try
   the --safe and --verysafe options.
+
+Usage for the lpdf script
+-------------------------
+
+::
+
+  usage: git lpdf [-h] [-b BANNER] [-d] [-l LATEX] [--latex-opt OPT]
+                  [-m TEXFILE] [-n] [-o COMMAND] [--output PATH] [-t DIR]
+                  [--install [DIR]] [--linkinstall [DIR]] [--readme]
+                  [COMMIT]
+  
+  Produce a PDF of a LaTeX document in a git repository, with the commit
+  information printed down the margin of every page.
+  
+  positional arguments:
+    COMMIT               the commit to typeset [the working copy]
+  
+  options:
+    -h, --help           show this help message and exit
+    -b, --banner BANNER  the banner printed in the left-hand margin
+    -d, --debug          print what the script is doing
+    -l, --latex LATEX    the latex executable [pdflatex]
+    --latex-opt OPT      an option passed to latex, repeatable; options that
+                         start with a dash need the equals form: --latex-
+                         opt=-shell-escape
+    -m, --main TEXFILE   the main latex file
+    -n, --nocleaning     keep the temporary directory
+    -o, --open COMMAND   the command used to open the PDF ("" to not open it)
+    --output PATH        where to write the PDF [beside the latex file]
+    -t, --tmp DIR        the temporary directory used for building
+    --install [DIR]      install the script into DIR [$HOME/bin]
+    --linkinstall [DIR]  link to the script from DIR [$HOME/bin]
+    --readme             regenerate README.rst
+  
+  examples:
+    git lpdf                     PDF of the current working copy, date stamped
+    git lpdf b675cdf             PDF of the main LaTeX file as of commit b675cdf
+    git lpdf --main paper/ms.tex HEAD~3
+    git lpdf <directory>         PDF of the copy of the repository in <directory>
 
 Licence
 -------
@@ -175,7 +188,7 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 
-Automatically generated 22 September 2026.
+Automatically generated 23 September 2026.
 
 .. References
 .. ..........

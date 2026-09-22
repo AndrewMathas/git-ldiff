@@ -1,14 +1,26 @@
 #!/usr/bin/env python3
 ## ======================
-## git-lpdf and git-ldiff
+## git-ldiff and git-lpdf
 ## ======================
+##
+## |version| |licence| |released|
+##
+## .. |version| image:: https://img.shields.io/github/v/tag/AndrewMathas/git-ldiff?color=success&label=git-ldiff
+##    :alt: Latest version
+##
+## .. |licence| image:: https://img.shields.io/badge/licence-GPL--3.0-blue?style=flat-square
+##    :alt: GNU General Public License, Version 3, 29 June 2007
+##    :target: https://www.gnu.org/licenses/gpl-3.0.html
+##
+## .. |released| image:: https://img.shields.io/github/release-date/AndrewMathas/git-ldiff?label=released&color=red
+##    :alt: Release date
 ##
 ## A python script for producing PDF files from a git repository that tracks
 ## LaTeX documents. There are two modes:
 ##
-## - lpdf:  produces a PDF file for a given commit in the repository
 ## - ldiff: uses latexdiff to produce a PDF that highlights the differences
 ##   between two commits
+## - lpdf:  produces a PDF file for a given commit in the repository
 ##
 ## In both cases the commit information is printed as a banner down the
 ## left-hand margin of every page of the PDF. This script is partially
@@ -17,14 +29,7 @@
 ##
 ## The main idea of the script is to provide an easy way to produce a PDF file
 ## from a git repository that is clearly annotated with the commit data. For
-## example,
-##
-## .. code-block:: bash
-##
-##    > git lpdf <commit>
-##
-## produces a PDF file for the commit <commit> of the main LaTeX file in the
-## current repository. Using latexdiff_, the command
+## example, using latexdiff_, the command
 ##
 ## .. code-block:: bash
 ##
@@ -37,7 +42,14 @@
 ##
 ##    > git ldiff <commit1> <commit2>
 ##
-## produces a PDF file showing the differences between two commits.
+## produces a PDF file showing the differences between two commits. Similarly,
+##
+## .. code-block:: bash
+##
+##    > git lpdf <commit>
+##
+## produces a PDF file for the commit <commit> of the main LaTeX file in the
+## current repository.
 ##
 ## Unlike the original bash implementation, LaTeX documents that are spread
 ## over several directories are fully supported: the directory structure of the
@@ -55,18 +67,18 @@
 ##
 ## .. code-block:: bash
 ##
-##   ./git-lpdf --install [directory]   # directory defaults to $HOME/bin
+##   ./git-ldiff --install [directory]   # directory defaults to $HOME/bin
 ##
 ## or
 ##
 ## .. code-block:: bash
 ##
-##   ./git-lpdf --linkinstall [directory]   # directory defaults to $HOME/bin
+##   ./git-ldiff --linkinstall [directory]   # directory defaults to $HOME/bin
 ##
-## The first version copies the script to <directory>/git-lpdf and creates a
-## link from <directory>/git-ldiff to <directory>/git-lpdf. The second variation
+## The first version copies the script to <directory>/git-ldiff and creates a
+## link from <directory>/git-lpdf to <directory>/git-ldiff. The second variation
 ## creates two links to the script in its current location, which is useful if
-## you have cloned the git repository for git-lpdf.
+## you have cloned the git repository for git-ldiff.
 ##
 ## The script makes use of the background_ package, latexmk_ and latexdiff_.
 ## All three are available from ctan_ and are installed automatically with
@@ -583,19 +595,19 @@ def install(location: str | None, link: bool) -> None:
         raise GitLPDFError(f"{where} is not a directory")
     me = Path(__file__).resolve()
 
-    lpdf_link, ldiff_link = where / "git-lpdf", where / "git-ldiff"
-    for target in (lpdf_link, ldiff_link):
+    ldiff_link, lpdf_link = where / "git-ldiff", where / "git-lpdf"
+    for target in (ldiff_link, lpdf_link):
         if target.exists() or target.is_symlink():
             target.unlink()
     if link:
-        lpdf_link.symlink_to(me)
-        print(f"{lpdf_link} -> {me}")
+        ldiff_link.symlink_to(me)
+        print(f"{ldiff_link} -> {me}")
     else:
-        shutil.copy2(me, lpdf_link)
-        lpdf_link.chmod(0o755)
-        print(f"{me} copied to {lpdf_link}")
-    ldiff_link.symlink_to(lpdf_link if not link else me)
-    print(f"{ldiff_link} -> {lpdf_link if not link else me}")
+        shutil.copy2(me, ldiff_link)
+        ldiff_link.chmod(0o755)
+        print(f"{me} copied to {ldiff_link}")
+    lpdf_link.symlink_to(ldiff_link if not link else me)
+    print(f"{lpdf_link} -> {ldiff_link if not link else me}")
 
 
 def generate_readme() -> None:
@@ -610,7 +622,7 @@ def generate_readme() -> None:
 
     with readme.open("w", encoding="utf-8") as out:
         out.write("\n".join(header))
-        for mode in ("lpdf", "ldiff"):
+        for mode in ("ldiff", "lpdf"):
             title = f"Usage for the {mode} script"
             out.write(f"\n\n{title}\n{'-' * len(title)}\n\n::\n\n")
             usage = parser(mode).format_help()
@@ -785,7 +797,7 @@ def parser(mode: str) -> argparse.ArgumentParser:
         metavar="DIR",
         help="link to the script from DIR [$HOME/bin]",
     )
-    add("--readme", action="store_true", help="regenerate readme.rst")
+    add("--readme", action="store_true", help="regenerate README.rst")
     return argue
 
 
