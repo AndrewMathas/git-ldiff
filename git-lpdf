@@ -599,9 +599,9 @@ def install(location: str | None, link: bool) -> None:
 
 
 def generate_readme() -> None:
-    """Rebuild readme.rst from the ## comments at the top of this file."""
+    """Rebuild README.rst from the ## comments at the top of this file."""
     me = Path(__file__).resolve()
-    readme = me.parent / "readme.rst"
+    readme = me.parent / "README.rst"
     header = [
         re.sub(r"^##[ ]?", "", line)
         for line in me.read_text(encoding="utf-8").splitlines()
