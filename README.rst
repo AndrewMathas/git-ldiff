@@ -1,7 +1,3 @@
-======================
-git-ldiff and git-lpdf
-======================
-
 |version| |licence| |released|
 
 .. |version| image:: https://img.shields.io/github/v/tag/AndrewMathas/git-ldiff?color=success&label=git-ldiff
@@ -13,6 +9,10 @@ git-ldiff and git-lpdf
 
 .. |released| image:: https://img.shields.io/github/release-date/AndrewMathas/git-ldiff?label=released&color=red
    :alt: Release date
+
+======================
+git-ldiff and git-lpdf
+======================
 
 A python script for producing PDF files from a git repository that tracks
 LaTeX documents. There are two modes:
